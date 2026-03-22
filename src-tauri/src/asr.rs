@@ -1,0 +1,269 @@
+use anyhow::{anyhow, Result};
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use futures_util::{SinkExt, StreamExt};
+use serde_json::json;
+use std::io::Write;
+use std::thread::{self, JoinHandle};
+use tokio::sync::mpsc;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::http::header::HeaderValue;
+
+const ASYNC_URL: &str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async";
+
+#[derive(Clone)]
+pub struct AsrService {}
+
+pub struct StreamingSession {
+    handle: Option<JoinHandle<String>>,
+    tx: Option<mpsc::Sender<Vec<f32>>>,
+}
+
+impl StreamingSession {
+    pub fn finish_and_wait(mut self) -> Result<String> {
+        self.tx.take();
+        if let Some(handle) = self.handle.take() {
+            match handle.join() {
+                Ok(text) => Ok(text),
+                Err(_) => Err(anyhow!("Transcription thread panicked")),
+            }
+        } else {
+            Err(anyhow!("Session already finished"))
+        }
+    }
+}
+
+impl AsrService {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub fn start_streaming_session<F>(
+        &self,
+        audio_rx: std::sync::mpsc::Receiver<Vec<f32>>,
+        sample_rate: u32,
+        config: crate::storage::OnlineAsrConfig,
+        on_update: F,
+    ) -> Result<StreamingSession>
+    where
+        F: Fn(String) + Send + 'static,
+    {
+        let (tx, mut async_rx) = mpsc::channel::<Vec<f32>>(100);
+
+        // A thread to bridge sync receiver to async receiver
+        let tx_clone = tx.clone();
+        thread::spawn(move || {
+            while let Ok(data) = audio_rx.recv() {
+                if tx_clone.blocking_send(data).is_err() {
+                    break;
+                }
+            }
+        });
+
+        // Main streaming thread
+        let handle = thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            
+            rt.block_on(async move {
+                let mut request = ASYNC_URL.into_client_request().unwrap();
+                {
+                    let headers = request.headers_mut();
+                    headers.insert("X-Api-App-Key", HeaderValue::from_str(&config.app_key).unwrap());
+                    headers.insert("X-Api-Access-Key", HeaderValue::from_str(&config.access_key).unwrap());
+                    headers.insert("X-Api-Resource-Id", HeaderValue::from_str(&config.resource_id).unwrap());
+                    headers.insert("X-Api-Connect-Id", HeaderValue::from_str(&uuid::Uuid::new_v4().to_string()).unwrap());
+                }
+
+                let (ws_stream, _response) = match connect_async(request).await {
+                    Ok(res) => res,
+                    Err(e) => {
+                        eprintln!("[ASR] WebSocket connection failed: {}", e);
+                        return String::new();
+                    }
+                };
+
+                let (mut write, mut read) = ws_stream.split();
+
+                // Send full client request
+                let req_payload = json!({
+                    "user": {
+                        "uid": "fastsp-user"
+                    },
+                    "audio": {
+                        "format": "pcm",
+                        "codec": "raw",
+                        "rate": sample_rate,
+                        "bits": 16,
+                        "channel": 1,
+                        "language": "zh-CN"
+                    },
+                    "request": {
+                        "model_name": "bigmodel",
+                        "enable_itn": true,
+                        "enable_punc": true,
+                        "show_utterances": true,
+                        "result_type": "full",
+                        "enable_nonstream": true
+                    }
+                }).to_string();
+
+                let compressed = gzip_compress(req_payload.as_bytes());
+                let mut msg = Vec::new();
+                let _header: u32 = 0x11101100;
+                msg.extend_from_slice(&[0x11, 0x10, 0x11, 0x00]);
+                let payload_size = compressed.len() as u32;
+                msg.extend_from_slice(&payload_size.to_be_bytes());
+                msg.extend_from_slice(&compressed);
+
+                if let Err(e) = write.send(Message::Binary(msg.into())).await {
+                    eprintln!("[ASR] Failed to send full client request: {}", e);
+                    return String::new();
+                }
+
+                let mut seq: i32 = 2;
+                let read_task = tokio::spawn(async move {
+                    let mut final_text = String::new();
+                    let mut latest_text = String::new();
+                    while let Some(msg) = read.next().await {
+                        match msg {
+                            Ok(Message::Binary(data)) => {
+                                if data.len() < 4 { continue; }
+                                let header_len = ((data[0] & 0x0F) * 4) as usize;
+                                if data.len() < header_len { continue; }
+                                let msg_type = (data[1] >> 4) & 0x0F;
+                                let flags = data[1] & 0x0F;
+                                let is_compressed = (data[2] & 0x0F) == 0b0001;
+                                
+                                let mut offset = header_len;
+                                if msg_type == 0b1111 {
+                                    // Error message includes a 4-byte Error code
+                                    offset += 4;
+                                } else if flags == 0b0001 || flags == 0b0011 {
+                                    // Contains sequence number
+                                    offset += 4;
+                                }
+
+                                if data.len() < offset + 4 { continue; }
+                                let payload_size = u32::from_be_bytes(data[offset..offset+4].try_into().unwrap()) as usize;
+                                let payload_offset = offset + 4;
+                                
+                                if data.len() < payload_offset + payload_size { continue; }
+                                let payload = &data[payload_offset..payload_offset+payload_size];
+                                
+                                let decompressed = if is_compressed {
+                                    gzip_decompress(payload)
+                                } else {
+                                    payload.to_vec()
+                                };
+
+                                if msg_type == 0b1001 || msg_type == 0b1011 { // Full or Partial response
+                                    if let Ok(json_str) = String::from_utf8(decompressed) {
+                                        if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                                            if let Some(result) = json_val.get("result") {
+                                                if let Some(text) = result.get("text").and_then(|t| t.as_str()) {
+                                                    latest_text = text.to_string();
+                                                    if msg_type == 0b1001 {
+                                                        final_text = latest_text.clone();
+                                                    }
+                                                    on_update(latest_text.clone());
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else if msg_type == 0b1111 { // Error
+                                    let msg_str = String::from_utf8_lossy(&decompressed);
+                                    eprintln!("[ASR] Server error: {}", msg_str);
+                                }
+                            }
+                            Ok(Message::Text(text)) => {
+                                eprintln!("[ASR] Received Text msg: {}", text);
+                            }
+                            Ok(Message::Close(c)) => {
+                                eprintln!("[ASR] Received Close: {:?}", c);
+                            }
+                            Err(e) => {
+                                eprintln!("[ASR] Read error: {}", e);
+                            }
+                            _ => {}
+                        }
+                    }
+                    if !final_text.is_empty()
+                        && latest_text.starts_with(&final_text)
+                        && latest_text.len() > final_text.len()
+                    {
+                        latest_text
+                    } else if !final_text.is_empty() {
+                        final_text
+                    } else {
+                        latest_text
+                    }
+                });
+
+                while let Some(audio_chunk) = async_rx.recv().await {
+                    let pcm = float_to_pcm16(&audio_chunk);
+                    let mut pcm_bytes = Vec::with_capacity(pcm.len() * 2);
+                    for sample in pcm {
+                        pcm_bytes.extend_from_slice(&sample.to_le_bytes()); // pcm is LE
+                    }
+
+                    let compressed = gzip_compress(&pcm_bytes);
+                    let mut msg = Vec::new();
+                    msg.extend_from_slice(&[0x11, 0x21, 0x01, 0x00]);
+                    msg.extend_from_slice(&seq.to_be_bytes());
+                    let payload_size = compressed.len() as u32;
+                    msg.extend_from_slice(&payload_size.to_be_bytes());
+                    msg.extend_from_slice(&compressed);
+
+                    if write.send(Message::Binary(msg.into())).await.is_err() {
+                        break;
+                    }
+                    seq += 1;
+                }
+
+                // Send EOF packet
+                let mut msg = Vec::new();
+                msg.extend_from_slice(&[0x11, 0x23, 0x01, 0x00]);
+                msg.extend_from_slice(&(-seq).to_be_bytes());
+                msg.extend_from_slice(&0u32.to_be_bytes());
+
+                let _ = write.send(Message::Binary(msg.into())).await;
+                
+                // Wait for read to finish and return text
+                read_task.await.unwrap_or_default()
+            })
+        });
+
+        Ok(StreamingSession {
+            handle: Some(handle),
+            tx: Some(tx),
+        })
+    }
+}
+
+fn gzip_compress(data: &[u8]) -> Vec<u8> {
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(data).unwrap();
+    encoder.finish().unwrap()
+}
+
+fn gzip_decompress(data: &[u8]) -> Vec<u8> {
+    use std::io::Read;
+    let mut decoder = flate2::read::GzDecoder::new(data);
+    let mut result = Vec::new();
+    let _ = decoder.read_to_end(&mut result);
+    result
+}
+
+fn float_to_pcm16(samples: &[f32]) -> Vec<i16> {
+    samples.iter()
+        .map(|&s| {
+            let clamped = s.clamp(-1.0, 1.0);
+            (clamped * i16::MAX as f32) as i16
+        })
+        .collect()
+}
