@@ -166,6 +166,20 @@ pnpm tauri build
 
 Build artifacts are located in `src-tauri/target/release/bundle/` (includes Windows NSIS installer).
 
+### GitHub Actions Build And Release
+
+- `Build Windows Installer` runs automatically on pushes to `main` / `master`, on pull requests, and by manual dispatch.
+- `Release Windows Installer` runs automatically when you push a tag like `v1.0.1` and publishes the NSIS installer to GitHub Releases.
+
+Example release flow:
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+Before using the release workflow, make sure GitHub Actions is enabled for the repository and the default `GITHUB_TOKEN` has permission to create releases.
+
 ## Tech Stack (Implementation Overview)
 
 - **Frontend**: React + TypeScript + TailwindCSS + Vite
