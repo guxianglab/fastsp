@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+@theme {
+    --color-chinese-indigo: #1661ab;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+body {
+    /* Clean White background */
+    background-color: #ffffff;
+    color: #0f172a;
+    /* Slate 900 */
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar for Webkit */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.1);
+    /* Slate 900 at 10% */
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(15, 23, 42, 0.2);
+}
+
+/* Premium Animation Keyframes */
+@keyframes ripple-expand {
+    0% {
+        transform: scale(1);
+        opacity: 0.4;
+        border-width: 4px;
+    }
+
+    100% {
+        transform: scale(2.5);
+        opacity: 0;
+        border-width: 0px;
+    }
+}
+
+@keyframes core-breathe {
+
+    0%,
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 40px rgba(22, 97, 171, 0.15);
+    }
+
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 70px rgba(22, 97, 171, 0.3);
+    }
+}
+
+.animate-ripple-1 {
+    animation: ripple-expand 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-ripple-2 {
+    animation: ripple-expand 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    animation-delay: 0.8s;
+}
+
+.animate-ripple-3 {
+    animation: ripple-expand 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    animation-delay: 1.6s;
+}
+
+.animate-core-breathe {
+    animation: core-breathe 3s ease-in-out infinite;
+}
