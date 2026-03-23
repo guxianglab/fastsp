@@ -576,6 +576,11 @@ fn clear_history(state: tauri::State<StorageState>) -> Result<(), String> {
     state.clear_history().map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn delete_history_item(id: String, state: tauri::State<StorageState>) -> Result<(), String> {
+    state.delete_history_item(id).map_err(|e| e.to_string())
+}
+
 
 
 #[tauri::command]
@@ -891,7 +896,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            get_config, take_runtime_notice, save_config, get_history, clear_history,
+            get_config, take_runtime_notice, save_config, get_history, clear_history, delete_history_item,
             get_asr_status,
             get_input_devices, get_current_input_device, switch_input_device,
             start_audio_test, stop_audio_test,

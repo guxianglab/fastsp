@@ -353,6 +353,7 @@ pub struct HistoryItem {
 
 enum StorageOp {
     AddHistory(HistoryItem),
+    DeleteHistoryItem(String),
     ClearHistory,
 }
 
@@ -390,6 +391,18 @@ impl StorageService {
                             .unwrap_or_default();
 
                         history.insert(0, item);
+
+                        if let Ok(content) = serde_json::to_string_pretty(&history) {
+                            let _ = fs::write(&history_path_clone, content);
+                        }
+                    }
+                    StorageOp::DeleteHistoryItem(id) => {
+                        let mut history: Vec<HistoryItem> = fs::read_to_string(&history_path_clone)
+                            .ok()
+                            .and_then(|s| serde_json::from_str(&s).ok())
+                            .unwrap_or_default();
+
+                        history.retain(|item| item.id != id);
 
                         if let Ok(content) = serde_json::to_string_pretty(&history) {
                             let _ = fs::write(&history_path_clone, content);
@@ -444,6 +457,11 @@ impl StorageService {
 
     pub fn add_history_item(&self, item: HistoryItem) -> Result<()> {
         self.write_tx.send(StorageOp::AddHistory(item))?;
+        Ok(())
+    }
+
+    pub fn delete_history_item(&self, id: String) -> Result<()> {
+        self.write_tx.send(StorageOp::DeleteHistoryItem(id))?;
         Ok(())
     }
 
