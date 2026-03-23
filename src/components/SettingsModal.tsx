@@ -393,7 +393,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
                       <select
                         value={currentDevice}
                         onChange={(event) => switchDevice(event.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 outline-none transition focus:border-chinese-indigo"
+                        className="input-underline w-full py-2 text-neutral-900"
                       >
                         <option value="">默认设备</option>
                         {devices.map((device) => (
@@ -410,9 +410,9 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
                         </PrimaryButton>
                       </div>
                     </div>
-                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-neutral-200">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-chinese-indigo to-sky-400 transition-all"
+                        className="h-full rounded-full bg-chinese-indigo transition-all"
                         style={{ width: `${audioLevel * 100}%` }}
                       />
                     </div>
@@ -515,7 +515,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
                           <select
                             value={config.llm_config.active_profile_id}
                             onChange={(event) => updateLlm("active_profile_id", event.target.value)}
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 outline-none transition focus:border-chinese-indigo"
+                            className="input-underline w-full py-2 text-neutral-900"
                           >
                             {config.llm_config.profiles.map((profile) => (
                               <option key={profile.id} value={profile.id}>
@@ -540,10 +540,10 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
                           <button
                             key={template.key}
                             onClick={() => applyTemplate(template.key)}
-                            className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
                               active.task_kind === template.key
-                                ? "bg-chinese-indigo text-white"
-                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                ? "bg-neutral-900 text-white"
+                                : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300"
                             }`}
                           >
                             {template.label}
