@@ -10,6 +10,8 @@ mod storage;
 
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use storage::{AppConfig, HistoryItem, LlmConfig, PromptProfile, ProxyConfig};
 use serde::Serialize;
 use tokio_util::sync::CancellationToken;
@@ -100,6 +102,23 @@ fn show_indicator_window<R: Runtime>(app_handle: &AppHandle<R>, is_llm: bool) {
 /// Emit session_complete event to let frontend handle fade-out animation
 fn emit_session_complete<R: Runtime>(app_handle: &AppHandle<R>) {
     app_handle.emit("session_complete", ()).ok();
+}
+
+fn show_main_window<R: Runtime>(app_handle: &AppHandle<R>) {
+    if let Some(window) = app_handle.get_webview_window("main") {
+        window.show().ok();
+        window.unminimize().ok();
+        window.set_focus().ok();
+    }
+}
+
+fn hide_main_window<R: Runtime>(app_handle: &AppHandle<R>) {
+    if let Some(window) = app_handle.get_webview_window("main") {
+        window.hide().ok();
+    }
+    if let Some(indicator) = app_handle.get_webview_window("indicator") {
+        indicator.hide().ok();
+    }
 }
 
 /// Process transcribed text: apply LLM correction if enabled, save to history, emit event, paste
@@ -663,6 +682,35 @@ pub fn run() {
                 Err(e) => eprintln!("Failed to create indicator window: {:?}", e),
             }
 
+            let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let tray_menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+            let tray_icon = app
+                .default_window_icon()
+                .cloned()
+                .expect("default window icon is required for tray");
+
+            TrayIconBuilder::with_id("main-tray")
+                .icon(tray_icon)
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main_window(&tray.app_handle());
+                    }
+                })
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "show" => show_main_window(app),
+                    "quit" => std::process::exit(0),
+                    _ => {}
+                })
+                .build(app)?;
+
             // Initialize Storage (config in AppData\Roaming)
             let app_dir = app.path().app_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("data"));
             let storage_service = storage::StorageService::new(app_dir.clone());
@@ -850,11 +898,10 @@ pub fn run() {
             test_llm_connection, get_default_scene_template
         ])
         .on_window_event(|window, event| {
-            // Force exit when main window is closed, because rdev::listen runs in a
-            // non-daemon thread that would otherwise keep the process alive.
-            if let tauri::WindowEvent::Destroyed = event {
-                if window.label() == "main" {
-                    std::process::exit(0);
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    hide_main_window(&window.app_handle());
                 }
             }
         })

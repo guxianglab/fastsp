@@ -314,21 +314,21 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
   const saveText = isSaving ? "正在保存..." : saveOk ? "已保存" : "自动保存";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20 p-4 backdrop-blur-sm" onClick={close}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/20 p-4 backdrop-blur-sm" onClick={close}>
       <div
         className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-neutral-50 shadow-[0_4px_24px_rgba(0,0,0,0.06)]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-5">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">{isFirstSetup ? "完成设置" : "设置"}</h2>
-            <div className="mt-1 text-sm text-slate-500">
+            <h2 className="text-xl font-semibold text-neutral-900">{isFirstSetup ? "完成设置" : "设置"}</h2>
+            <div className="mt-1 text-sm text-neutral-500">
               {isFirstSetup ? "先配置麦克风和识别服务" : saveText}
             </div>
           </div>
           <button
             onClick={close}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
           >
             <X className="h-5 w-5" />
           </button>
@@ -388,7 +388,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
 
                 <Section title="输入设备">
                   <Surface>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">设备</label>
+                    <label className="mb-2 block text-sm font-medium text-neutral-600">设备</label>
                     <div className="flex flex-col gap-3 lg:flex-row">
                       <select
                         value={currentDevice}
@@ -502,7 +502,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
                 <Section title="场景设置">
                   <button
                     onClick={() => setShowScenes((value) => !value)}
-                    className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:border-slate-300"
+                    className="flex w-full items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3 text-left text-sm font-medium text-neutral-700 transition-colors hover:border-neutral-300"
                   >
                     <span>{showScenes ? "收起场景设置" : "展开场景设置"}</span>
                     <ChevronDown className={`h-4 w-4 transition-transform ${showScenes ? "rotate-180" : ""}`} />
@@ -620,7 +620,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
       </div>
 
       {showWarning && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/25 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-950/25 p-4 backdrop-blur-sm">
           <div
             className="w-full max-w-sm rounded-2xl bg-neutral-50 p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)]"
             onClick={(event) => event.stopPropagation()}
@@ -831,7 +831,7 @@ function SkillCard({
     <div className="border-b border-neutral-200 py-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-sm font-medium text-slate-900">{name}</div>
+          <div className="text-sm font-medium text-neutral-900">{name}</div>
           <div className="mt-1 text-sm text-neutral-600">命中后执行，不粘贴文本</div>
         </div>
         <button
