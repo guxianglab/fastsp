@@ -264,17 +264,23 @@ fn process_transcription_for_skill<R: Runtime>(
     let config = storage.load_config();
     let skills_config = config.skills.clone();
 
-    // Try to match a skill
-    if let Some(skill_id) = skills::match_skill(&text, &skills_config) {
-        println!("[SKILL] #{} Matched skill: {}", seq_id, skill_id);
-        
-        // Execute the skill
-        match skills::execute_skill(&skill_id) {
-            Ok(_) => {
-                println!("[SKILL] #{} Executed successfully: {}", seq_id, skill_id);
-            }
-            Err(e) => {
-                eprintln!("[SKILL] #{} Execution failed: {}", seq_id, e);
+    // Try to match one or more skills in the transcript.
+    let matched_skills = skills::match_skills(&text, &skills_config);
+    if !matched_skills.is_empty() {
+        println!(
+            "[SKILL] #{} Matched skills: {}",
+            seq_id,
+            matched_skills.join(", ")
+        );
+
+        for skill_id in matched_skills {
+            match skills::execute_skill(&skill_id) {
+                Ok(_) => {
+                    println!("[SKILL] #{} Executed successfully: {}", seq_id, skill_id);
+                }
+                Err(e) => {
+                    eprintln!("[SKILL] #{} Execution failed for {}: {}", seq_id, skill_id, e);
+                }
             }
         }
     } else {

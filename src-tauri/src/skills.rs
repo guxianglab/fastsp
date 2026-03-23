@@ -74,27 +74,48 @@ pub fn get_default_skills() -> Vec<SkillConfig> {
     ]
 }
 
-pub fn match_skill(text: &str, skills: &[SkillConfig]) -> Option<String> {
+pub fn match_skills(text: &str, skills: &[SkillConfig]) -> Vec<String> {
     let text_lower = text.to_lowercase();
+    let mut matches: Vec<(usize, usize, String)> = Vec::new();
 
-    for skill in skills {
+    for (skill_index, skill) in skills.iter().enumerate() {
         if !skill.enabled {
             continue;
         }
 
+        let mut first_match_pos: Option<usize> = None;
+        let mut matched_keyword: Option<String> = None;
+
         for keyword in skill.keywords.split(',') {
             let keyword = keyword.trim().to_lowercase();
-            if !keyword.is_empty() && text_lower.contains(&keyword) {
-                println!(
-                    "[SKILL] Matched skill '{}' with keyword '{}'",
-                    skill.id, keyword
-                );
-                return Some(skill.id.clone());
+            if keyword.is_empty() {
+                continue;
             }
+
+            if let Some(pos) = text_lower.find(&keyword) {
+                let should_replace = match first_match_pos {
+                    Some(existing_pos) => pos < existing_pos,
+                    None => true,
+                };
+
+                if should_replace {
+                    first_match_pos = Some(pos);
+                    matched_keyword = Some(keyword);
+                }
+            }
+        }
+
+        if let (Some(pos), Some(keyword)) = (first_match_pos, matched_keyword) {
+            println!(
+                "[SKILL] Matched skill '{}' with keyword '{}'",
+                skill.id, keyword
+            );
+            matches.push((pos, skill_index, skill.id.clone()));
         }
     }
 
-    None
+    matches.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+    matches.into_iter().map(|(_, _, skill_id)| skill_id).collect()
 }
 
 pub fn execute_skill(skill_id: &str) -> Result<(), String> {
@@ -156,7 +177,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_match_skill() {
+    fn test_match_skills_single() {
         let skills = vec![
             SkillConfig {
                 id: "compose_email".to_string(),
@@ -173,18 +194,44 @@ mod tests {
         ];
 
         assert_eq!(
-            match_skill("compose email", &skills),
-            Some("compose_email".to_string())
+            match_skills("compose email", &skills),
+            vec!["compose_email".to_string()]
         );
         assert_eq!(
-            match_skill("please write email to the team", &skills),
-            Some("compose_email".to_string())
+            match_skills("please write email to the team", &skills),
+            vec!["compose_email".to_string()]
         );
         assert_eq!(
-            match_skill("open calculator", &skills),
-            Some("open_calculator".to_string())
+            match_skills("open calculator", &skills),
+            vec!["open_calculator".to_string()]
         );
-        assert_eq!(match_skill("the weather is nice today", &skills), None);
+        assert!(match_skills("the weather is nice today", &skills).is_empty());
+    }
+
+    #[test]
+    fn test_match_skills_multiple_in_transcript_order() {
+        let skills = vec![
+            SkillConfig {
+                id: "open_calculator".to_string(),
+                name: "Open Calculator".to_string(),
+                keywords: "calculator,open calculator".to_string(),
+                enabled: true,
+            },
+            SkillConfig {
+                id: "open_browser".to_string(),
+                name: "Open Browser".to_string(),
+                keywords: "browser,open browser".to_string(),
+                enabled: true,
+            },
+        ];
+
+        assert_eq!(
+            match_skills("browser and calculator", &skills),
+            vec![
+                "open_browser".to_string(),
+                "open_calculator".to_string()
+            ]
+        );
     }
 
     #[test]
@@ -197,6 +244,21 @@ mod tests {
         }];
         skills[0].enabled = false;
 
-        assert_eq!(match_skill("compose email", &skills), None);
+        assert!(match_skills("compose email", &skills).is_empty());
+    }
+
+    #[test]
+    fn test_match_skills_deduplicates_per_skill() {
+        let skills = vec![SkillConfig {
+            id: "open_browser".to_string(),
+            name: "Open Browser".to_string(),
+            keywords: "browser,open browser".to_string(),
+            enabled: true,
+        }];
+
+        assert_eq!(
+            match_skills("please open browser in the browser", &skills),
+            vec!["open_browser".to_string()]
+        );
     }
 }
