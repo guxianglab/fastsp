@@ -1,20 +1,14 @@
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
-/// 技能配置
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SkillConfig {
-    /// 技能唯一标识
     pub id: String,
-    /// 技能显示名称
     pub name: String,
-    /// 触发关键词列表（逗号分隔存储，匹配时拆分）
     pub keywords: String,
-    /// 是否启用
     pub enabled: bool,
 }
 
-/// 预置技能ID
 #[derive(Debug, Clone, PartialEq)]
 pub enum BuiltinSkillId {
     ComposeEmail,
@@ -28,18 +22,17 @@ pub enum BuiltinSkillId {
 impl BuiltinSkillId {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "compose_email" => Some(BuiltinSkillId::ComposeEmail),
-            "open_calculator" => Some(BuiltinSkillId::OpenCalculator),
-            "open_browser" => Some(BuiltinSkillId::OpenBrowser),
-            "open_notepad" => Some(BuiltinSkillId::OpenNotepad),
-            "open_explorer" => Some(BuiltinSkillId::OpenExplorer),
-            "screenshot" => Some(BuiltinSkillId::Screenshot),
+            "compose_email" => Some(Self::ComposeEmail),
+            "open_calculator" => Some(Self::OpenCalculator),
+            "open_browser" => Some(Self::OpenBrowser),
+            "open_notepad" => Some(Self::OpenNotepad),
+            "open_explorer" => Some(Self::OpenExplorer),
+            "screenshot" => Some(Self::Screenshot),
             _ => None,
         }
     }
 }
 
-/// 获取默认技能列表
 pub fn get_default_skills() -> Vec<SkillConfig> {
     vec![
         SkillConfig {
@@ -51,7 +44,7 @@ pub fn get_default_skills() -> Vec<SkillConfig> {
         SkillConfig {
             id: "open_calculator".to_string(),
             name: "计算器".to_string(),
-            keywords: "计算器,算一下,打开计算器".to_string(),
+            keywords: "计算器,打开计算器".to_string(),
             enabled: true,
         },
         SkillConfig {
@@ -63,13 +56,13 @@ pub fn get_default_skills() -> Vec<SkillConfig> {
         SkillConfig {
             id: "open_notepad".to_string(),
             name: "记事本".to_string(),
-            keywords: "记事本,写笔记,打开记事本".to_string(),
+            keywords: "记事本,打开记事本".to_string(),
             enabled: true,
         },
         SkillConfig {
             id: "open_explorer".to_string(),
             name: "文件管理器".to_string(),
-            keywords: "文件管理器,我的电脑,资源管理器,打开文件夹".to_string(),
+            keywords: "文件管理器,资源管理器,打开文件夹".to_string(),
             enabled: true,
         },
         SkillConfig {
@@ -81,8 +74,6 @@ pub fn get_default_skills() -> Vec<SkillConfig> {
     ]
 }
 
-/// 模糊匹配：检查识别文本是否包含任一关键词
-/// 返回匹配到的技能ID
 pub fn match_skill(text: &str, skills: &[SkillConfig]) -> Option<String> {
     let text_lower = text.to_lowercase();
 
@@ -91,7 +82,6 @@ pub fn match_skill(text: &str, skills: &[SkillConfig]) -> Option<String> {
             continue;
         }
 
-        // 拆分关键词并检查是否匹配
         for keyword in skill.keywords.split(',') {
             let keyword = keyword.trim().to_lowercase();
             if !keyword.is_empty() && text_lower.contains(&keyword) {
@@ -107,13 +97,9 @@ pub fn match_skill(text: &str, skills: &[SkillConfig]) -> Option<String> {
     None
 }
 
-/// 执行技能
 pub fn execute_skill(skill_id: &str) -> Result<(), String> {
-    let builtin = BuiltinSkillId::from_str(skill_id);
-
-    match builtin {
+    match BuiltinSkillId::from_str(skill_id) {
         Some(BuiltinSkillId::ComposeEmail) => {
-            // 打开默认邮件客户端新建邮件
             println!("[SKILL] Executing: compose_email");
             Command::new("cmd")
                 .args(["/C", "start", "mailto:"])
@@ -130,7 +116,6 @@ pub fn execute_skill(skill_id: &str) -> Result<(), String> {
         }
         Some(BuiltinSkillId::OpenBrowser) => {
             println!("[SKILL] Executing: open_browser");
-            // 使用 start 命令打开默认浏览器
             Command::new("cmd")
                 .args(["/C", "start", "https://"])
                 .spawn()
@@ -153,11 +138,10 @@ pub fn execute_skill(skill_id: &str) -> Result<(), String> {
         }
         Some(BuiltinSkillId::Screenshot) => {
             println!("[SKILL] Executing: screenshot (Win+Shift+S)");
-            // 使用 PowerShell 发送 Win+Shift+S 快捷键
             Command::new("powershell")
                 .args([
                     "-Command",
-                    "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('+#{s}')"
+                    "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('+#{s}')",
                 ])
                 .spawn()
                 .map_err(|e| format!("Failed to trigger screenshot: {}", e))?;
@@ -173,33 +157,46 @@ mod tests {
 
     #[test]
     fn test_match_skill() {
-        let skills = get_default_skills();
+        let skills = vec![
+            SkillConfig {
+                id: "compose_email".to_string(),
+                name: "Compose Email".to_string(),
+                keywords: "compose email,write email".to_string(),
+                enabled: true,
+            },
+            SkillConfig {
+                id: "open_calculator".to_string(),
+                name: "Open Calculator".to_string(),
+                keywords: "calculator,open calculator".to_string(),
+                enabled: true,
+            },
+        ];
 
-        // 精确匹配
         assert_eq!(
-            match_skill("写邮件", &skills),
+            match_skill("compose email", &skills),
             Some("compose_email".to_string())
         );
-
-        // 包含匹配
         assert_eq!(
-            match_skill("帮我写封邮件", &skills),
+            match_skill("please write email to the team", &skills),
             Some("compose_email".to_string())
         );
         assert_eq!(
-            match_skill("打开计算器", &skills),
+            match_skill("open calculator", &skills),
             Some("open_calculator".to_string())
         );
-
-        // 无匹配
-        assert_eq!(match_skill("今天天气不错", &skills), None);
+        assert_eq!(match_skill("the weather is nice today", &skills), None);
     }
 
     #[test]
     fn test_disabled_skill() {
-        let mut skills = get_default_skills();
-        skills[0].enabled = false; // 禁用写邮件
+        let mut skills = vec![SkillConfig {
+            id: "compose_email".to_string(),
+            name: "Compose Email".to_string(),
+            keywords: "compose email,write email".to_string(),
+            enabled: true,
+        }];
+        skills[0].enabled = false;
 
-        assert_eq!(match_skill("写邮件", &skills), None);
+        assert_eq!(match_skill("compose email", &skills), None);
     }
 }

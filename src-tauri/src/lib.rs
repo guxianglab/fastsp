@@ -143,7 +143,7 @@ fn process_transcription<R: Runtime>(
         }
         let _guard = ProcessingGuard(processing_clone);
 
-        let final_text = if llm_config.enabled && !llm_config.api_key.is_empty() {
+        let final_text = if llm_config.enabled {
             // Create cancellation token for this LLM request
             let cancel_token = CancellationToken::new();
             {
@@ -523,6 +523,11 @@ fn get_config(state: tauri::State<StorageState>) -> AppConfig {
 }
 
 #[tauri::command]
+fn take_runtime_notice(state: tauri::State<StorageState>) -> Option<String> {
+    state.take_runtime_notice()
+}
+
+#[tauri::command]
 fn save_config(
     state: tauri::State<StorageState>, 
     listener: tauri::State<InputListenerState>,
@@ -832,7 +837,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            get_config, save_config, get_history, clear_history,
+            get_config, take_runtime_notice, save_config, get_history, clear_history,
             get_asr_status,
             get_input_devices, get_current_input_device, switch_input_device,
             start_audio_test, stop_audio_test,

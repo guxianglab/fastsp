@@ -6,9 +6,6 @@ use serde_json::{json, Value};
 use crate::http_client::build_client;
 use crate::storage::{LlmConfig, PromptProfile, ProxyConfig};
 
-const RESPONSE_SCHEMA_NAME: &str = "fastsp_scene_result";
-const PROBE_SCHEMA_NAME: &str = "fastsp_probe_result";
-
 #[derive(Debug, Clone)]
 pub struct CorrectionOutcome {
     pub final_text: String,
@@ -76,61 +73,66 @@ Follow these rules in priority order:
 6. If the request cannot be completed safely or the scene is underspecified, set status to fallback, leave final_text empty, and explain why in reason."
 }
 
+fn probe_instructions() -> &'static str {
+    "Return a JSON object with exactly this shape: {\"status\":\"ok\"}. Do not include markdown or any extra text."
+}
+
 fn build_scene_request(model: &str, scene: &PromptProfile, transcript: &str) -> Value {
     let payload = json!({
         "scene": scene,
         "transcript": transcript,
+        "required_output_schema": correction_schema(),
     });
 
     json!({
         "model": model,
-        "input": [
+        "messages": [
             {
-                "role": "developer",
+                "role": "system",
                 "content": developer_instructions()
             },
             {
                 "role": "user",
                 "content": serde_json::to_string_pretty(&payload).unwrap_or_else(|_| payload.to_string())
             }
-        ],
-        "text": {
-            "format": {
-                "type": "json_schema",
-                "name": RESPONSE_SCHEMA_NAME,
-                "schema": correction_schema(),
-                "strict": true
-            }
-        }
+        ]
     })
 }
 
 fn build_probe_request(model: &str) -> Value {
     json!({
         "model": model,
-        "input": [
+        "messages": [
             {
-                "role": "developer",
-                "content": "Return the probe payload using the exact JSON schema."
+                "role": "system",
+                "content": probe_instructions()
             },
             {
                 "role": "user",
-                "content": "Connectivity probe"
+                "content": serde_json::to_string_pretty(&json!({
+                    "task": "connectivity_probe",
+                    "required_output_schema": probe_schema(),
+                })).unwrap()
             }
-        ],
-        "text": {
-            "format": {
-                "type": "json_schema",
-                "name": PROBE_SCHEMA_NAME,
-                "schema": probe_schema(),
-                "strict": true
-            }
-        }
+        ]
     })
 }
 
-fn responses_url(base_url: &str) -> String {
-    format!("{}/responses", base_url.trim_end_matches('/'))
+fn chat_completions_url(base_url: &str) -> String {
+    format!("{}/chat/completions", base_url.trim_end_matches('/'))
+}
+
+fn validate_config(config: &LlmConfig) -> Result<()> {
+    if config.base_url.trim().is_empty() {
+        return Err(anyhow!("Base URL is empty"));
+    }
+    if config.api_key.trim().is_empty() {
+        return Err(anyhow!("API Key is empty"));
+    }
+    if config.model.trim().is_empty() {
+        return Err(anyhow!("Model is empty"));
+    }
+    Ok(())
 }
 
 fn fallback_outcome(text: &str, scene: &PromptProfile, reason: impl Into<String>) -> CorrectionOutcome {
@@ -141,25 +143,26 @@ fn fallback_outcome(text: &str, scene: &PromptProfile, reason: impl Into<String>
     }
 }
 
-fn classify_api_error(status: StatusCode, body: &str) -> anyhow::Error {
+fn classify_api_error(status: StatusCode, body: &str, request_url: &str) -> anyhow::Error {
     let body = body.trim();
     let lower = body.to_ascii_lowercase();
 
     if status == StatusCode::NOT_FOUND {
         return anyhow!(
-            "Responses API is not available at this endpoint. FastSP now requires /v1/responses with strict JSON schema output."
+            "Configured endpoint returned 404 for chat completions API: {}. FastSP posts to <Base URL>/chat/completions. Server response: {}",
+            request_url,
+            if body.is_empty() { "<empty body>" } else { body }
         );
     }
 
-    if lower.contains("json_schema")
+    if lower.contains("response_format")
+        || lower.contains("json_schema")
         || lower.contains("structured output")
         || lower.contains("structured outputs")
-        || lower.contains("strict")
-        || lower.contains("response_format")
         || lower.contains("unsupported schema")
     {
         return anyhow!(
-            "The server is reachable, but strict structured outputs are not supported: {}",
+            "The server is reachable, but the configured model rejected structured output settings: {}",
             body
         );
     }
@@ -167,75 +170,53 @@ fn classify_api_error(status: StatusCode, body: &str) -> anyhow::Error {
     anyhow!("LLM API error ({}): {}", status, body)
 }
 
-fn extract_text_content(value: &Value) -> Option<String> {
-    if let Some(text) = value.get("output_text").and_then(Value::as_str) {
-        let trimmed = text.trim();
-        if !trimmed.is_empty() {
-            return Some(trimmed.to_string());
-        }
-    }
-
-    value.get("output")
+fn extract_message_content(value: &Value) -> Option<String> {
+    value.get("choices")
         .and_then(Value::as_array)
-        .and_then(|items| {
-            items.iter().find_map(|item| {
-                item.get("content")
-                    .and_then(Value::as_array)
-                    .and_then(|content_items| {
-                        content_items.iter().find_map(|content| {
-                            let kind = content.get("type").and_then(Value::as_str).unwrap_or_default();
-                            if matches!(kind, "output_text" | "text" | "message_text") {
-                                content
-                                    .get("text")
-                                    .and_then(Value::as_str)
-                                    .map(|text| text.trim().to_string())
-                                    .filter(|text| !text.is_empty())
-                            } else {
-                                None
-                            }
+        .and_then(|choices| choices.first())
+        .and_then(|choice| choice.get("message"))
+        .and_then(|message| message.get("content"))
+        .and_then(|content| {
+            content
+                .as_str()
+                .map(str::to_string)
+                .or_else(|| {
+                    content.as_array().and_then(|items| {
+                        items.iter().find_map(|item| {
+                            item.get("text")
+                                .and_then(Value::as_str)
+                                .map(str::to_string)
                         })
                     })
-            })
+                })
         })
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty())
 }
 
 fn extract_refusal(value: &Value) -> Option<String> {
-    value.get("output")
+    value.get("choices")
         .and_then(Value::as_array)
-        .and_then(|items| {
-            items.iter().find_map(|item| {
-                item.get("content")
-                    .and_then(Value::as_array)
-                    .and_then(|content_items| {
-                        content_items.iter().find_map(|content| {
-                            let kind = content.get("type").and_then(Value::as_str).unwrap_or_default();
-                            if kind == "refusal" {
-                                content
-                                    .get("refusal")
-                                    .or_else(|| content.get("text"))
-                                    .and_then(Value::as_str)
-                                    .map(str::to_string)
-                            } else {
-                                None
-                            }
-                        })
-                    })
-            })
-        })
+        .and_then(|choices| choices.first())
+        .and_then(|choice| choice.get("message"))
+        .and_then(|message| message.get("refusal"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
 }
 
 fn incomplete_reason(value: &Value) -> Option<String> {
-    let status = value.get("status").and_then(Value::as_str)?;
-    if status != "incomplete" {
-        return None;
+    if let Some(finish_reason) = value
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|choices| choices.first())
+        .and_then(|choice| choice.get("finish_reason"))
+        .and_then(Value::as_str)
+    {
+        if finish_reason == "length" {
+            return Some("LLM response was incomplete because it hit the max token limit".to_string());
+        }
     }
-
-    let details = value
-        .get("incomplete_details")
-        .map(|details| serde_json::to_string(details).unwrap_or_else(|_| "unknown".to_string()))
-        .unwrap_or_else(|| "unknown".to_string());
-
-    Some(format!("LLM response was incomplete: {}", details))
+    None
 }
 
 fn parse_scene_response(
@@ -255,8 +236,8 @@ fn parse_scene_response(
         ));
     }
 
-    let raw_text = extract_text_content(response_json)
-        .ok_or_else(|| anyhow!("Responses API returned no text content"))?;
+    let raw_text = extract_message_content(response_json)
+        .ok_or_else(|| anyhow!("Chat Completions API returned no text content"))?;
 
     let structured: StructuredSceneResult =
         serde_json::from_str(&raw_text).with_context(|| format!("Invalid structured output: {}", raw_text))?;
@@ -284,9 +265,10 @@ fn parse_scene_response(
 
 async fn send_request(body: &Value, config: &LlmConfig, proxy: &ProxyConfig, timeout_secs: u64) -> Result<Value> {
     let client = build_client(proxy, timeout_secs)?;
+    let request_url = chat_completions_url(&config.base_url);
 
     let response = client
-        .post(responses_url(&config.base_url))
+        .post(&request_url)
         .header("Authorization", format!("Bearer {}", config.api_key))
         .header("Content-Type", "application/json")
         .json(body)
@@ -297,16 +279,17 @@ async fn send_request(body: &Value, config: &LlmConfig, proxy: &ProxyConfig, tim
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(classify_api_error(status, &body));
+        return Err(classify_api_error(status, &body, &request_url));
     }
 
     response
         .json::<Value>()
         .await
-        .with_context(|| "Failed to parse JSON response from Responses API")
+        .with_context(|| "Failed to parse JSON response from Chat Completions API")
 }
 
 pub async fn correct_text(text: &str, config: &LlmConfig, proxy: &ProxyConfig) -> Result<CorrectionOutcome> {
+    validate_config(config)?;
     let scene = config.get_active_profile();
     let request = build_scene_request(&config.model, &scene, text);
     let response_json = send_request(&request, config, proxy, 30).await?;
@@ -314,10 +297,7 @@ pub async fn correct_text(text: &str, config: &LlmConfig, proxy: &ProxyConfig) -
 }
 
 pub async fn test_connection(config: &LlmConfig, proxy: &ProxyConfig) -> Result<String> {
-    if config.api_key.trim().is_empty() {
-        return Err(anyhow!("API Key is empty"));
-    }
-
+    validate_config(config)?;
     let request = build_probe_request(&config.model);
     let response_json = send_request(&request, config, proxy, 10).await?;
 
@@ -329,14 +309,14 @@ pub async fn test_connection(config: &LlmConfig, proxy: &ProxyConfig) -> Result<
         return Err(anyhow!("Connected, but model refused the structured probe: {}", refusal));
     }
 
-    let raw_text = extract_text_content(&response_json)
-        .ok_or_else(|| anyhow!("Connected, but the Responses API probe returned no text content"))?;
+    let raw_text = extract_message_content(&response_json)
+        .ok_or_else(|| anyhow!("Connected, but the chat completions probe returned no text content"))?;
 
     let probe: ProbeResult =
         serde_json::from_str(&raw_text).with_context(|| format!("Probe did not match schema: {}", raw_text))?;
 
     Ok(format!(
-        "Connected. Responses API and strict structured output are available. Probe status: {}",
+        "Connected. Chat Completions API is available. Probe status: {}",
         probe.status
     ))
 }
@@ -352,16 +332,13 @@ mod tests {
     fn structured_ok_response_returns_final_text() {
         let scene = PromptProfile::new_default();
         let response = json!({
-            "status": "completed",
-            "output": [
+            "choices": [
                 {
-                    "type": "message",
-                    "content": [
-                        {
-                            "type": "output_text",
-                            "text": "{\"status\":\"ok\",\"final_text\":\"fixed text\",\"reason\":\"\",\"applied_scene\":\"Default\"}"
-                        }
-                    ]
+                    "finish_reason": "stop",
+                    "message": {
+                        "role": "assistant",
+                        "content": "{\"status\":\"ok\",\"final_text\":\"fixed text\",\"reason\":\"\",\"applied_scene\":\"Default\"}"
+                    }
                 }
             ]
         });
@@ -375,16 +352,13 @@ mod tests {
     fn structured_fallback_response_uses_original_text() {
         let scene = PromptProfile::new_default();
         let response = json!({
-            "status": "completed",
-            "output": [
+            "choices": [
                 {
-                    "type": "message",
-                    "content": [
-                        {
-                            "type": "output_text",
-                            "text": "{\"status\":\"fallback\",\"final_text\":\"\",\"reason\":\"underspecified\",\"applied_scene\":\"Default\"}"
-                        }
-                    ]
+                    "finish_reason": "stop",
+                    "message": {
+                        "role": "assistant",
+                        "content": "{\"status\":\"fallback\",\"final_text\":\"\",\"reason\":\"underspecified\",\"applied_scene\":\"Default\"}"
+                    }
                 }
             ]
         });

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings } from "lucide-react";
+import { AlertCircle, Settings, Wrench, X } from "lucide-react";
 import { HistoryList } from "./components/HistoryList";
 import { SettingsModal } from "./components/SettingsModal";
 import { StatusSection } from "./components/StatusSection";
@@ -12,10 +12,18 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [asrConfigured, setAsrConfigured] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [llmError, setLlmError] = useState<string | null>(null);
+  const [runtimeNotice, setRuntimeNotice] = useState<string | null>(null);
 
   useEffect(() => {
     api.getAsrStatus().then(status => {
       setAsrConfigured(status.configured);
+    });
+
+    api.takeRuntimeNotice().then((notice) => {
+      if (notice) {
+        setRuntimeNotice(notice);
+      }
     });
 
     Promise.all([api.getConfig(), api.getAsrStatus()]).then(([config, asrStatus]) => {
@@ -28,11 +36,25 @@ function App() {
     });
 
     const unsubRecording = events.onRecordingStatus(setIsRecording);
+    const unsubLlmError = events.onLlmError((message) => {
+      setLlmError(message);
+    });
 
     return () => {
       unsubRecording.then(f => f());
+      unsubLlmError.then(f => f());
     };
   }, []);
+
+  useEffect(() => {
+    if (!llmError) return;
+
+    const timeout = window.setTimeout(() => {
+      setLlmError(null);
+    }, 8000);
+
+    return () => window.clearTimeout(timeout);
+  }, [llmError]);
 
   const handleSettingsClose = () => {
     if (needsSetup) {
@@ -54,6 +76,29 @@ function App() {
   return (
     <div className="flex h-screen w-full bg-white text-slate-800 overflow-hidden selection:bg-chinese-indigo/20">
       <TitleBar />
+
+      {(runtimeNotice || llmError) && (
+        <div className="fixed inset-x-0 top-12 z-40 mx-auto flex max-w-5xl flex-col gap-2 px-4">
+          {runtimeNotice && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+              <Wrench className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <div className="flex-1">{runtimeNotice}</div>
+              <button onClick={() => setRuntimeNotice(null)} className="text-amber-700 transition-colors hover:text-amber-900">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {llmError && (
+            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 shadow-sm">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <div className="flex-1">{llmError}</div>
+              <button onClick={() => setLlmError(null)} className="text-red-700 transition-colors hover:text-red-900">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Content Container - Padded for TitleBar (h-10 = 40px) */}
       <div className="flex-1 flex flex-col md:flex-row h-full max-w-7xl mx-auto w-full pt-14 pb-4 px-4 md:px-6 gap-6">

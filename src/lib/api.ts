@@ -78,6 +78,7 @@ export interface HistoryItem {
 
 export const api = {
     getConfig: () => invoke<AppConfig>("get_config"),
+    takeRuntimeNotice: () => invoke<string | null>("take_runtime_notice"),
     saveConfig: (config: AppConfig) => invoke("save_config", { config }),
     getHistory: () => invoke<HistoryItem[]>("get_history"),
     clearHistory: () => invoke("clear_history"),
@@ -97,6 +98,7 @@ export const events = {
     onRecognitionProcessing: (callback: (isProcessing: boolean) => void) => listen<boolean>("recognition_processing", (e) => callback(e.payload)),
     onAudioLevel: (callback: (level: number) => void) => listen<number>("audio_level", (e) => callback(e.payload)),
     onLlmProcessing: (callback: (isProcessing: boolean) => void) => listen<boolean>("llm_processing", (e) => callback(e.payload)),
+    onLlmError: (callback: (message: string) => void) => listen<string>("llm_error", (e) => callback(e.payload)),
     onMousePosition: (callback: (pos: { x: number; y: number }) => void) => listen<{ x: number; y: number }>("mouse_position", (e) => callback(e.payload)),
     onStreamUpdate: (callback: (text: string) => void) => listen<string>("stream_update", (e) => callback(e.payload)),
 };
