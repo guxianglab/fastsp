@@ -316,7 +316,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/20 p-4 backdrop-blur-sm" onClick={close}>
       <div
-        className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-neutral-50 shadow-[0_4px_24px_rgba(0,0,0,0.06)]"
+        className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden bg-neutral-50 shadow-[0_4px_24px_rgba(0,0,0,0.06)]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-5">
@@ -328,7 +328,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
           </div>
           <button
             onClick={close}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
+            className="inline-flex h-10 w-10 items-center justify-center text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
           >
             <X className="h-5 w-5" />
           </button>
@@ -622,11 +622,11 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
       {showWarning && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-950/25 p-4 backdrop-blur-sm">
           <div
-            className="w-full max-w-sm rounded-2xl bg-neutral-50 p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)]"
+            className="w-full max-w-sm bg-neutral-50 p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+              <div className="flex h-10 w-10 items-center justify-center bg-amber-100 text-amber-600">
                 <AlertCircle className="h-5 w-5" />
               </div>
               <div>
@@ -753,7 +753,7 @@ function Area({
         rows={rows}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full resize-none rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-chinese-indigo"
+        className="w-full resize-none bg-neutral-50 px-3 py-2 text-sm text-neutral-900 outline-none transition focus:bg-white focus:shadow-[inset_0_0_0_1px_#d4d4d4]"
       />
     </div>
   );

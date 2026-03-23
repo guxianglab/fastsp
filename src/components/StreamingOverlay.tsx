@@ -85,28 +85,24 @@ export function StreamingOverlay({ visible }: StreamingOverlayProps) {
     <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">
       <div
         className={`
-          bg-slate-900/90 backdrop-blur-sm
-          text-white text-lg font-medium
-          px-6 py-3 rounded-2xl
-          shadow-2xl shadow-black/20
-          border border-slate-700/50
-          max-w-lg min-w-[200px]
-          transition-all duration-300 ease-out
-          ${shouldShow ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
+          bg-neutral-50
+          text-neutral-900 text-sm
+          px-4 py-3
+          border border-neutral-200
+          max-w-lg min-w-[180px]
+          transition-all duration-200 ease-out
+          ${shouldShow ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}
         `}
       >
         <div className="flex items-center gap-3">
-          <div className="relative flex-shrink-0">
-            <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
-            <div className="absolute inset-0 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping opacity-75" />
-          </div>
+          <div className="flex-shrink-0 w-1 h-4 bg-chinese-indigo" />
 
           <span className="truncate">{displayText}</span>
         </div>
 
-        <div className="mt-2 h-0.5 bg-slate-700 rounded-full overflow-hidden">
+        <div className="mt-2 h-px bg-neutral-200 overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-chinese-indigo to-emerald-400 rounded-full animate-pulse"
+            className="h-full bg-chinese-indigo transition-all duration-300"
             style={{
               width: streamText ? "100%" : isLlmProcessing ? "80%" : isProcessing ? "60%" : "30%",
             }}

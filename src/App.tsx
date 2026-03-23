@@ -136,7 +136,7 @@ function NoticeBar({
   const barColor = tone === "amber" ? "bg-amber-500" : "bg-red-500";
 
   return (
-    <div className="relative flex items-start gap-3 overflow-hidden rounded-lg bg-neutral-50 py-3 pr-4 pl-5">
+    <div className="relative flex items-start gap-3 overflow-hidden bg-neutral-50 py-3 pr-4 pl-5">
       <div className={`absolute left-0 top-0 h-full w-1 ${barColor}`} />
       <div className="mt-0.5 flex-shrink-0 text-neutral-400">{icon}</div>
       <div className="min-w-0 flex-1">
