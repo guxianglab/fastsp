@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Copy, Trash2 } from "lucide-react";
+import { Copy, Trash2, X } from "lucide-react";
 import { api, events, HistoryItem } from "../lib/api";
 
 export function HistoryList() {
@@ -20,6 +20,11 @@ export function HistoryList() {
     navigator.clipboard.writeText(text);
   };
 
+  const deleteItem = async (id: string) => {
+    await api.deleteHistoryItem(id);
+    setItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
   const clearAll = async () => {
     if (window.confirm("确定清空全部记录吗？")) {
       await api.clearHistory();
@@ -30,17 +35,17 @@ export function HistoryList() {
   return (
     <section className="flex h-full min-h-[280px] flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between pb-4">
-        <h2 className="text-base font-medium text-neutral-900">转写记录</h2>
-        <div className="flex items-center gap-3">
-          <span className="rounded bg-neutral-200 px-2 py-0.5 text-xs text-neutral-500">{items.length} 条</span>
+      <div className="flex items-center justify-between pb-3">
+        <h2 className="text-xs font-medium uppercase tracking-wider text-neutral-400">转写记录</h2>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-neutral-300">{items.length} 条</span>
           {items.length > 0 && (
             <button
               onClick={clearAll}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-neutral-500 transition-colors hover:bg-red-50 hover:text-red-500"
+              className="p-1 text-neutral-400 transition-colors hover:text-red-500"
+              title="清空"
             >
-              <Trash2 className="h-3.5 w-3.5" />
-              清空
+              <Trash2 className="h-4 w-4" />
             </button>
           )}
         </div>
@@ -65,16 +70,25 @@ export function HistoryList() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="line-clamp-3 text-sm leading-relaxed text-neutral-800">{item.text}</p>
-                  <div className="mt-2 text-xs text-neutral-400">{item.timestamp}</div>
+                  <div className="mt-1.5 text-xs text-neutral-400">{item.timestamp}</div>
                 </div>
 
-                <button
-                  onClick={() => copyText(item.text)}
-                  className="flex-shrink-0 rounded-lg p-2 text-neutral-400 opacity-0 transition-all hover:bg-white hover:text-neutral-600 group-hover:opacity-100"
-                  title="复制"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    onClick={() => copyText(item.text)}
+                    className="p-1 text-neutral-400 transition-colors hover:text-neutral-600"
+                    title="复制"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => deleteItem(item.id)}
+                    className="p-1 text-neutral-400 transition-colors hover:text-red-500"
+                    title="删除"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </article>
             ))}
           </div>

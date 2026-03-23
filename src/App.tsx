@@ -145,7 +145,7 @@ function NoticeBar({
       </div>
       <button
         onClick={onClose}
-        className="rounded-lg p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600"
+        className="p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600"
       >
         <X className="h-4 w-4" />
       </button>

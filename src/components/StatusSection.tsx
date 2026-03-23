@@ -29,15 +29,15 @@ export function StatusSection({ isRecording, asrConfigured, onSettingsClick }: S
 
         {/* Status text */}
         <div>
-          <div className="text-base font-medium text-neutral-900">{statusText}</div>
-          <div className="text-sm text-neutral-500">{helperText}</div>
+          <div className="text-sm text-neutral-900">{statusText}</div>
+          <div className="text-xs text-neutral-400">{helperText}</div>
         </div>
       </div>
 
       {/* Settings button */}
       <button
         onClick={onSettingsClick}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600"
+        className="p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-700"
       >
         <Settings2 className="h-4 w-4" />
       </button>

@@ -82,6 +82,7 @@ export const api = {
     saveConfig: (config: AppConfig) => invoke("save_config", { config }),
     getHistory: () => invoke<HistoryItem[]>("get_history"),
     clearHistory: () => invoke("clear_history"),
+    deleteHistoryItem: (id: string) => invoke("delete_history_item", { id }),
     getAsrStatus: () => invoke<AsrStatus>("get_asr_status"),
     getInputDevices: () => invoke<AudioDevice[]>("get_input_devices"),
     getCurrentInputDevice: () => invoke<string>("get_current_input_device"),

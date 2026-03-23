@@ -388,7 +388,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
 
                 <Section title="输入设备">
                   <Surface>
-                    <label className="mb-2 block text-sm font-medium text-neutral-600">设备</label>
+                    <label className="mb-2 block text-xs text-neutral-400">设备</label>
                     <div className="flex flex-col gap-3 lg:flex-row">
                       <select
                         value={currentDevice}
@@ -502,7 +502,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
                 <Section title="场景设置">
                   <button
                     onClick={() => setShowScenes((value) => !value)}
-                    className="flex w-full items-center justify-between rounded-lg border border-neutral-200 bg-white px-4 py-3 text-left text-sm font-medium text-neutral-700 transition-colors hover:border-neutral-300"
+                    className="flex w-full items-center justify-between bg-neutral-100 px-3 py-2 text-left text-sm text-neutral-600 transition-colors hover:bg-neutral-200 hover:text-neutral-900"
                   >
                     <span>{showScenes ? "收起场景设置" : "展开场景设置"}</span>
                     <ChevronDown className={`h-4 w-4 transition-transform ${showScenes ? "rotate-180" : ""}`} />
@@ -540,10 +540,10 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
                           <button
                             key={template.key}
                             onClick={() => applyTemplate(template.key)}
-                            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                            className={`px-2 py-1 text-sm transition-colors ${
                               active.task_kind === template.key
-                                ? "bg-neutral-900 text-white"
-                                : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300"
+                                ? "bg-neutral-900 text-neutral-50"
+                                : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700"
                             }`}
                           >
                             {template.label}
@@ -647,7 +647,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-4">
-      <div className="border-b border-neutral-200 pb-2 text-sm font-medium text-neutral-900">{title}</div>
+      <div className="border-b border-neutral-200 pb-2 text-xs font-medium uppercase tracking-wider text-neutral-400">{title}</div>
       <div className="space-y-4">{children}</div>
     </section>
   );
@@ -669,22 +669,33 @@ function ToggleRow({
   onToggle: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2">
+    <button
+      onClick={onToggle}
+      className="group flex w-full items-start justify-between gap-4 py-2 text-left"
+    >
       <div>
-        <div className="text-sm font-medium text-neutral-900">{title}</div>
-        <div className="mt-1 text-sm text-neutral-500">{desc}</div>
+        <div className="text-sm text-neutral-900">{title}</div>
+        <div className="mt-0.5 text-xs text-neutral-400">{desc}</div>
       </div>
-      <button
-        onClick={onToggle}
-        className={`relative h-6 w-11 rounded-full transition-colors ${active ? "bg-chinese-indigo" : "bg-neutral-300"}`}
-      >
-        <span
-          className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
-            active ? "left-7" : "left-1"
+      <div className="relative mt-1 h-4 w-7 flex-shrink-0">
+        {/* Track line */}
+        <div className="absolute left-0.5 right-0.5 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-200" />
+        {/* Active fill */}
+        <div
+          className={`absolute left-0.5 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-900 transition-all duration-200 ease-out ${
+            active ? "w-6" : "w-0"
           }`}
         />
-      </button>
-    </div>
+        {/* Thumb */}
+        <div
+          className={`absolute top-0 h-4 w-4 transition-all duration-200 ease-out ${
+            active
+              ? "left-3.5 bg-neutral-900"
+              : "left-0 border-2 border-neutral-300 bg-neutral-50"
+          }`}
+        />
+      </div>
+    </button>
   );
 }
 
@@ -693,7 +704,7 @@ function MiniButton({ onClick, icon, disabled = false }: { onClick: () => void; 
     <button
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-200 text-neutral-700 transition-colors hover:bg-neutral-300 disabled:cursor-not-allowed disabled:opacity-40"
+      className="inline-flex h-8 w-8 items-center justify-center text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
     >
       {icon}
     </button>
@@ -713,12 +724,12 @@ function Field({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-neutral-600">{label}</label>
+      <label className="mb-1 block text-xs text-neutral-400">{label}</label>
       <input
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="input-underline w-full py-2 text-neutral-900"
+        className="input-underline w-full py-2 text-sm text-neutral-900"
       />
     </div>
   );
@@ -737,12 +748,12 @@ function Area({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-neutral-600">{label}</label>
+      <label className="mb-1 block text-xs text-neutral-400">{label}</label>
       <textarea
         rows={rows}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full resize-none rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-neutral-900 outline-none transition focus:border-chinese-indigo"
+        className="w-full resize-none rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-chinese-indigo"
       />
     </div>
   );
@@ -761,11 +772,11 @@ function Select({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-neutral-600">{label}</label>
+      <label className="mb-1 block text-xs text-neutral-400">{label}</label>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="input-underline w-full py-2 text-neutral-900"
+        className="input-underline w-full py-2 text-sm text-neutral-900"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -787,7 +798,7 @@ function ActionButton({
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center justify-center rounded-lg bg-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-300"
+      className="px-2 py-1 text-sm text-neutral-500 transition-colors hover:bg-neutral-200 hover:text-neutral-900"
     >
       {children}
     </button>
@@ -807,7 +818,7 @@ function PrimaryButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center justify-center gap-2 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex items-center justify-center gap-2 bg-neutral-900 px-3 py-1.5 text-sm font-medium text-neutral-50 transition-opacity hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>
@@ -831,16 +842,27 @@ function SkillCard({
     <div className="border-b border-neutral-200 py-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-sm font-medium text-neutral-900">{name}</div>
-          <div className="mt-1 text-sm text-neutral-600">命中后执行，不粘贴文本</div>
+          <div className="text-sm text-neutral-900">{name}</div>
+          <div className="mt-0.5 text-xs text-neutral-400">命中后执行，不粘贴文本</div>
         </div>
         <button
           onClick={onToggle}
-          className={`relative h-6 w-11 rounded-full transition-colors ${enabled ? "bg-chinese-indigo" : "bg-neutral-300"}`}
+          className="relative mt-1 h-4 w-7 flex-shrink-0"
         >
-          <span
-            className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
-              enabled ? "left-7" : "left-1"
+          {/* Track line */}
+          <div className="absolute left-0.5 right-0.5 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-200" />
+          {/* Active fill */}
+          <div
+            className={`absolute left-0.5 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-900 transition-all duration-200 ease-out ${
+              enabled ? "w-6" : "w-0"
+            }`}
+          />
+          {/* Thumb */}
+          <div
+            className={`absolute top-0 h-4 w-4 transition-all duration-200 ease-out ${
+              enabled
+                ? "left-3.5 bg-neutral-900"
+                : "left-0 border-2 border-neutral-300 bg-neutral-50"
             }`}
           />
         </button>
