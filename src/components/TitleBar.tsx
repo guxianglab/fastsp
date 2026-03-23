@@ -12,7 +12,7 @@ export function TitleBar() {
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-50 h-0">
-      <div data-tauri-drag-region className="absolute inset-x-0 top-0 h-6" />
+      <div data-tauri-drag-region className="pointer-events-auto absolute inset-x-0 top-0 h-6" />
 
       <div className="pointer-events-auto absolute right-4 top-4 flex items-center gap-2">
         <button

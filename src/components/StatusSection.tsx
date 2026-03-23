@@ -12,7 +12,7 @@ export function StatusSection({ isRecording, asrConfigured, onSettingsClick }: S
 
   return (
     <section className="flex items-center justify-between py-4">
-      <div className="flex items-center gap-4">
+      <div data-tauri-drag-region className="flex items-center gap-4">
         {/* Status indicator dot */}
         <div className="relative flex h-3 w-3 items-center justify-center">
           {isRecording ? (
