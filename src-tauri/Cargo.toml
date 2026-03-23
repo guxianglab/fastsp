@@ -39,3 +39,5 @@ arboard = "3.6.1"
 tokio-tungstenite = { version = "0.29.0", features = ["native-tls"] }
 tungstenite = "0.29.0"
 flate2 = "1.1.9"
+base64 = "0.22"
+tokio-socks = "0.5.2"

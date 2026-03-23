@@ -395,9 +395,15 @@ fn begin_recording_session<R: Runtime>(
     let config = storage.load_config();
     let asr = app_handle.state::<AsrState>();
     let handle = app_handle.clone();
-    match asr.start_streaming_session(stream_rx, sample_rate, config.online_asr_config, move |text| {
-        handle.emit("stream_update", text).ok();
-    }) {
+    match asr.start_streaming_session(
+        stream_rx,
+        sample_rate,
+        config.online_asr_config,
+        config.proxy,
+        move |text| {
+            handle.emit("stream_update", text).ok();
+        },
+    ) {
         Ok(session) => {
             *streaming_session = Some(session);
             println!(
