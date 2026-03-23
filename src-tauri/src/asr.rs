@@ -1,15 +1,19 @@
 use anyhow::{anyhow, Result};
+use base64::Engine;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use std::io::Write;
 use std::thread::{self, JoinHandle};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::TcpStream;
 use tokio::sync::mpsc;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::http::header::HeaderValue;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::{self, Message};
+use tokio_tungstenite::client_async_tls_with_config;
+use tokio_socks::tcp::{Socks4Stream, Socks5Stream};
 
 const ASYNC_URL: &str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async";
 
@@ -45,6 +49,7 @@ impl AsrService {
         audio_rx: std::sync::mpsc::Receiver<Vec<f32>>,
         sample_rate: u32,
         config: crate::storage::OnlineAsrConfig,
+        proxy: crate::storage::ProxyConfig,
         on_update: F,
     ) -> Result<StreamingSession>
     where
@@ -79,7 +84,7 @@ impl AsrService {
                     headers.insert("X-Api-Connect-Id", HeaderValue::from_str(&uuid::Uuid::new_v4().to_string()).unwrap());
                 }
 
-                let (ws_stream, _response) = match connect_async(request).await {
+                let (ws_stream, _response) = match connect_ws(request, &proxy).await {
                     Ok(res) => res,
                     Err(e) => {
                         eprintln!("[ASR] WebSocket connection failed: {}", e);
@@ -243,6 +248,157 @@ impl AsrService {
             tx: Some(tx),
         })
     }
+}
+
+trait AsyncIo: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T> AsyncIo for T where T: AsyncRead + AsyncWrite + Unpin + Send {}
+
+type BoxedStream = Box<dyn AsyncIo>;
+
+async fn connect_ws(
+    request: tungstenite::http::Request<()>,
+    proxy: &crate::storage::ProxyConfig,
+) -> Result<(
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<BoxedStream>>,
+    tungstenite::handshake::client::Response,
+)> {
+    let stream = connect_stream(ASYNC_URL, proxy).await?;
+    let response = client_async_tls_with_config(request, stream, None, None).await?;
+    Ok(response)
+}
+
+async fn connect_stream(url: &str, proxy: &crate::storage::ProxyConfig) -> Result<BoxedStream> {
+    let target = reqwest::Url::parse(url)?;
+    let host = target
+        .host_str()
+        .ok_or_else(|| anyhow!("ASR URL missing host"))?
+        .to_string();
+    let port = target
+        .port_or_known_default()
+        .ok_or_else(|| anyhow!("ASR URL missing port"))?;
+    let target_addr = format!("{host}:{port}");
+
+    if !proxy.enabled || proxy.url.trim().is_empty() {
+        return Ok(Box::new(TcpStream::connect(&target_addr).await?));
+    }
+
+    let proxy_url = reqwest::Url::parse(proxy.url.trim())?;
+    match proxy_url.scheme() {
+        "http" => connect_http_proxy(&proxy_url, &host, port).await,
+        "socks5" | "socks5h" => connect_socks5_proxy(&proxy_url, &host, port).await,
+        "socks4" | "socks4a" => connect_socks4_proxy(&proxy_url, &host, port).await,
+        scheme => Err(anyhow!("Unsupported proxy scheme for ASR websocket: {scheme}")),
+    }
+}
+
+async fn connect_http_proxy(proxy_url: &reqwest::Url, host: &str, port: u16) -> Result<BoxedStream> {
+    let proxy_addr = format!(
+        "{}:{}",
+        proxy_url
+            .host_str()
+            .ok_or_else(|| anyhow!("Proxy URL missing host"))?,
+        proxy_url
+            .port_or_known_default()
+            .ok_or_else(|| anyhow!("Proxy URL missing port"))?
+    );
+    let mut stream = TcpStream::connect(proxy_addr).await?;
+
+    let mut connect_req = format!(
+        "CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\nProxy-Connection: Keep-Alive\r\n"
+    );
+
+    if !proxy_url.username().is_empty() || proxy_url.password().is_some() {
+        let credentials = format!("{}:{}", proxy_url.username(), proxy_url.password().unwrap_or(""));
+        let encoded = base64::engine::general_purpose::STANDARD.encode(credentials);
+        connect_req.push_str(&format!("Proxy-Authorization: Basic {encoded}\r\n"));
+    }
+
+    connect_req.push_str("\r\n");
+    stream.write_all(connect_req.as_bytes()).await?;
+    stream.flush().await?;
+
+    let mut response = Vec::with_capacity(1024);
+    let mut chunk = [0u8; 512];
+    loop {
+        let read = stream.read(&mut chunk).await?;
+        if read == 0 {
+            return Err(anyhow!("Proxy closed connection before CONNECT completed"));
+        }
+        response.extend_from_slice(&chunk[..read]);
+        if response.windows(4).any(|w| w == b"\r\n\r\n") {
+            break;
+        }
+        if response.len() > 16 * 1024 {
+            return Err(anyhow!("Proxy CONNECT response too large"));
+        }
+    }
+
+    let head = String::from_utf8_lossy(&response);
+    let status_line = head.lines().next().unwrap_or_default();
+    if !status_line.contains(" 200 ") {
+        return Err(anyhow!("HTTP proxy CONNECT failed: {status_line}"));
+    }
+
+    Ok(Box::new(stream))
+}
+
+async fn connect_socks5_proxy(proxy_url: &reqwest::Url, host: &str, port: u16) -> Result<BoxedStream> {
+    let proxy_addr = format!(
+        "{}:{}",
+        proxy_url
+            .host_str()
+            .ok_or_else(|| anyhow!("Proxy URL missing host"))?,
+        proxy_url
+            .port_or_known_default()
+            .ok_or_else(|| anyhow!("Proxy URL missing port"))?
+    );
+    let target_addr = format!("{host}:{port}");
+
+    let stream = if !proxy_url.username().is_empty() || proxy_url.password().is_some() {
+        Socks5Stream::connect_with_password(
+            proxy_addr.as_str(),
+            target_addr.as_str(),
+            proxy_url.username(),
+            proxy_url.password().unwrap_or(""),
+        )
+        .await?
+        .into_inner()
+    } else {
+        Socks5Stream::connect(proxy_addr.as_str(), target_addr.as_str())
+            .await?
+            .into_inner()
+    };
+
+    Ok(Box::new(stream))
+}
+
+async fn connect_socks4_proxy(proxy_url: &reqwest::Url, host: &str, port: u16) -> Result<BoxedStream> {
+    let proxy_addr = format!(
+        "{}:{}",
+        proxy_url
+            .host_str()
+            .ok_or_else(|| anyhow!("Proxy URL missing host"))?,
+        proxy_url
+            .port_or_known_default()
+            .ok_or_else(|| anyhow!("Proxy URL missing port"))?
+    );
+    let target_addr = format!("{host}:{port}");
+
+    let stream = if !proxy_url.username().is_empty() {
+        Socks4Stream::connect_with_userid(
+            proxy_addr.as_str(),
+            target_addr.as_str(),
+            proxy_url.username(),
+        )
+            .await?
+            .into_inner()
+    } else {
+        Socks4Stream::connect(proxy_addr.as_str(), target_addr.as_str())
+            .await?
+            .into_inner()
+    };
+
+    Ok(Box::new(stream))
 }
 
 fn gzip_compress(data: &[u8]) -> Vec<u8> {

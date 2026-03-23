@@ -1208,6 +1208,7 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "arboard",
+ "base64 0.22.1",
  "chrono",
  "cpal",
  "enigo",
@@ -1224,6 +1225,7 @@ dependencies = [
  "tauri-plugin-opener",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-socks",
  "tokio-tungstenite",
  "tokio-util",
  "tungstenite",
