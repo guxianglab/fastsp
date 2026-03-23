@@ -646,15 +646,15 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="space-y-3">
-      <div className="text-base font-semibold text-slate-900">{title}</div>
-      {children}
+    <section className="space-y-4">
+      <div className="border-b border-neutral-200 pb-2 text-sm font-medium text-neutral-900">{title}</div>
+      <div className="space-y-4">{children}</div>
     </section>
   );
 }
 
 function Surface({ children }: { children: ReactNode }) {
-  return <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-4">{children}</div>;
+  return <div className="py-2">{children}</div>;
 }
 
 function ToggleRow({
@@ -669,24 +669,22 @@ function ToggleRow({
   onToggle: () => void;
 }) {
   return (
-    <Surface>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-sm font-medium text-slate-900">{title}</div>
-          <div className="mt-1 text-sm text-slate-500">{desc}</div>
-        </div>
-        <button
-          onClick={onToggle}
-          className={`relative h-7 w-12 rounded-full transition-colors ${active ? "bg-chinese-indigo" : "bg-slate-300"}`}
-        >
-          <span
-            className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${
-              active ? "left-6" : "left-1"
-            }`}
-          />
-        </button>
+    <div className="flex items-start justify-between gap-4 py-2">
+      <div>
+        <div className="text-sm font-medium text-neutral-900">{title}</div>
+        <div className="mt-1 text-sm text-neutral-500">{desc}</div>
       </div>
-    </Surface>
+      <button
+        onClick={onToggle}
+        className={`relative h-6 w-11 rounded-full transition-colors ${active ? "bg-chinese-indigo" : "bg-neutral-300"}`}
+      >
+        <span
+          className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
+            active ? "left-7" : "left-1"
+          }`}
+        />
+      </button>
+    </div>
   );
 }
 
@@ -714,15 +712,15 @@ function Field({
   type?: string;
 }) {
   return (
-    <Surface>
-      <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
+    <div>
+      <label className="mb-1 block text-sm font-medium text-neutral-600">{label}</label>
       <input
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 outline-none transition focus:border-chinese-indigo"
+        className="input-underline w-full py-2 text-neutral-900"
       />
-    </Surface>
+    </div>
   );
 }
 
@@ -738,15 +736,15 @@ function Area({
   rows?: number;
 }) {
   return (
-    <Surface>
-      <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
+    <div>
+      <label className="mb-1 block text-sm font-medium text-neutral-600">{label}</label>
       <textarea
         rows={rows}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-3 py-3 outline-none transition focus:border-chinese-indigo"
+        className="w-full resize-none rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-neutral-900 outline-none transition focus:border-chinese-indigo"
       />
-    </Surface>
+    </div>
   );
 }
 
@@ -762,12 +760,12 @@ function Select({
   onChange: (value: string) => void;
 }) {
   return (
-    <Surface>
-      <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
+    <div>
+      <label className="mb-1 block text-sm font-medium text-neutral-600">{label}</label>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 outline-none transition focus:border-chinese-indigo"
+        className="input-underline w-full py-2 text-neutral-900"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -775,7 +773,7 @@ function Select({
           </option>
         ))}
       </select>
-    </Surface>
+    </div>
   );
 }
 
