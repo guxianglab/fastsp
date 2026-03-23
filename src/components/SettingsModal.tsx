@@ -622,16 +622,16 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
       {showWarning && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/25 p-4 backdrop-blur-sm">
           <div
-            className="w-full max-w-sm rounded-[28px] bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.16)]"
+            className="w-full max-w-sm rounded-2xl bg-neutral-50 p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600">
                 <AlertCircle className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-slate-900">还没有完成设置</h3>
-                <p className="mt-1 text-sm text-slate-500">请先选择输入设备并填写识别凭证。</p>
+                <h3 className="text-base font-semibold text-neutral-900">还没有完成设置</h3>
+                <p className="mt-1 text-sm text-neutral-500">请先选择输入设备并填写识别凭证。</p>
               </div>
             </div>
             <div className="mt-6 flex justify-end">
@@ -828,31 +828,31 @@ function SkillCard({
   onKeywordsChange: (value: string) => void;
 }) {
   return (
-    <Surface>
+    <div className="border-b border-neutral-200 py-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-sm font-medium text-slate-900">{name}</div>
-          <div className="mt-1 text-sm text-slate-500">命中后执行，不粘贴文本</div>
+          <div className="mt-1 text-sm text-neutral-600">命中后执行，不粘贴文本</div>
         </div>
         <button
           onClick={onToggle}
-          className={`relative h-7 w-12 rounded-full transition-colors ${enabled ? "bg-chinese-indigo" : "bg-slate-300"}`}
+          className={`relative h-6 w-11 rounded-full transition-colors ${enabled ? "bg-chinese-indigo" : "bg-neutral-300"}`}
         >
           <span
-            className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${
-              enabled ? "left-6" : "left-1"
+            className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
+              enabled ? "left-7" : "left-1"
             }`}
           />
         </button>
       </div>
       <div className="mt-3">
-        <label className="mb-2 block text-sm font-medium text-slate-700">关键词</label>
+        <label className="mb-2 block text-sm font-medium text-neutral-600">关键词</label>
         <input
           value={keywords}
           onChange={(event) => onKeywordsChange(event.target.value)}
-          className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 outline-none transition focus:border-chinese-indigo"
+          className="input-underline w-full py-2 text-neutral-900"
         />
       </div>
-    </Surface>
+    </div>
   );
 }
