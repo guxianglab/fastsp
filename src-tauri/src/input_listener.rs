@@ -1,4 +1,5 @@
-use rdev::{listen, Button, EventType, Key};
+use rdev::{grab, Button, Event, EventType, Key};
+use std::cell::Cell;
 use std::sync::mpsc::Sender;
 use std::sync::{
     atomic::{AtomicBool, AtomicI64, Ordering},
@@ -65,11 +66,13 @@ impl InputListener {
         let last_mouse_position = self.last_mouse_position.clone();
 
         thread::spawn(move || {
-            let mut is_ctrl = false;
-            let mut is_win = false;
-            let mut combo_active = false;
+            let is_ctrl = Cell::new(false);
+            let is_win = Cell::new(false);
+            let combo_active = Cell::new(false);
 
-            if let Err(error) = listen(move |event| {
+            if let Err(error) = grab(move |event: Event| {
+                let mut swallow_event = false;
+
                 match event.event_type {
                     // Mouse Mode
                     EventType::ButtonPress(Button::Middle) => {
@@ -88,25 +91,31 @@ impl InputListener {
                         // Windows uses AltGr for Right Alt
                         if enable_toggle.load(Ordering::Relaxed) {
                             tx.send(InputEvent::Toggle).ok();
+                            swallow_event = true;
+                        }
+                    }
+                    EventType::KeyRelease(Key::AltGr) => {
+                        if enable_toggle.load(Ordering::Relaxed) {
+                            swallow_event = true;
                         }
                     }
 
                     // Hold Mode (Left Ctrl + Left Win)
                     EventType::KeyPress(Key::ControlLeft) => {
-                        is_ctrl = true;
-                        check_combo(&enable_hold, &mut combo_active, is_ctrl, is_win, &tx);
+                        is_ctrl.set(true);
+                        check_combo(&enable_hold, &combo_active, is_ctrl.get(), is_win.get(), &tx);
                     }
                     EventType::KeyRelease(Key::ControlLeft) => {
-                        is_ctrl = false;
-                        check_combo(&enable_hold, &mut combo_active, is_ctrl, is_win, &tx);
+                        is_ctrl.set(false);
+                        check_combo(&enable_hold, &combo_active, is_ctrl.get(), is_win.get(), &tx);
                     }
                     EventType::KeyPress(Key::MetaLeft) => {
-                        is_win = true;
-                        check_combo(&enable_hold, &mut combo_active, is_ctrl, is_win, &tx);
+                        is_win.set(true);
+                        check_combo(&enable_hold, &combo_active, is_ctrl.get(), is_win.get(), &tx);
                     }
                     EventType::KeyRelease(Key::MetaLeft) => {
-                        is_win = false;
-                        check_combo(&enable_hold, &mut combo_active, is_ctrl, is_win, &tx);
+                        is_win.set(false);
+                        check_combo(&enable_hold, &combo_active, is_ctrl.get(), is_win.get(), &tx);
                     }
 
                     // Mouse Position Tracking（无锁原子操作）
@@ -122,6 +131,12 @@ impl InputListener {
 
                     _ => {}
                 }
+
+                if swallow_event {
+                    None
+                } else {
+                    Some(event)
+                }
             }) {
                 println!("Error in input listener: {:?}", error);
             }
@@ -131,7 +146,7 @@ impl InputListener {
 
 fn check_combo(
     enable_hold: &Arc<AtomicBool>,
-    active: &mut bool,
+    active: &Cell<bool>,
     ctrl: bool,
     win: bool,
     tx: &Sender<InputEvent>,
@@ -140,11 +155,11 @@ fn check_combo(
         return;
     }
     let is_combo = ctrl && win;
-    if is_combo && !*active {
-        *active = true;
+    if is_combo && !active.get() {
+        active.set(true);
         tx.send(InputEvent::Start).ok();
-    } else if !is_combo && *active {
-        *active = false;
+    } else if !is_combo && active.get() {
+        active.set(false);
         // Ctrl+Win 释放时发送 StopForSkill 事件
         tx.send(InputEvent::StopForSkill).ok();
     }
