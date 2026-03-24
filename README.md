@@ -71,7 +71,6 @@ Configuration example (subject to actual version):
 ```json
 {
   "trigger_mouse": true,
-  "trigger_hold": true,
   "trigger_toggle": true,
   "online_asr_config": {
     "app_key": "",
@@ -192,9 +191,13 @@ Before using the release workflow, make sure GitHub Actions is enabled for the r
 
 ## FAQ
 
-### 1) Why doesn't Ctrl+Win type text?
+### 1) How do the triggers work now?
 
-This is **Skills Mode**: Ctrl+Win triggers match recognized text to skills and execute actions; by default it **does not type**. For dictation, use mouse middle button or Right Alt.
+Mouse middle button and Right Alt now share the same interaction:
+
+- Click once to start streaming dictation
+- Click again to stop dictation
+- Hold to speak a skill command, then release to execute it
 
 ### 2) Online ASR connection fails?
 

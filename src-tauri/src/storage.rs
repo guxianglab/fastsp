@@ -446,7 +446,6 @@ pub struct OnlineAsrConfig {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AppConfig {
     pub trigger_mouse: bool,
-    pub trigger_hold: bool,
     pub trigger_toggle: bool,
     #[serde(default)]
     pub online_asr_config: OnlineAsrConfig,
@@ -464,7 +463,6 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             trigger_mouse: true,
-            trigger_hold: true,
             trigger_toggle: true,
             online_asr_config: OnlineAsrConfig {
                 app_key: String::new(),
@@ -663,11 +661,15 @@ fn recover_app_config_from_object(mut obj: Map<String, Value>) -> (AppConfig, bo
     if skills_changed {
         needs_save = true;
     }
+    if obj.contains_key("trigger_hold") {
+        needs_save = true;
+    }
 
     let config = AppConfig {
         trigger_mouse: read_bool(&obj, "trigger_mouse").unwrap_or(true),
-        trigger_hold: read_bool(&obj, "trigger_hold").unwrap_or(true),
-        trigger_toggle: read_bool(&obj, "trigger_toggle").unwrap_or(true),
+        trigger_toggle: read_bool(&obj, "trigger_hold")
+            .or_else(|| read_bool(&obj, "trigger_toggle"))
+            .unwrap_or(true),
         online_asr_config: read_value(&obj, "online_asr_config").unwrap_or_default(),
         input_device: read_string(&obj, "input_device").unwrap_or_default(),
         llm_config,
@@ -858,7 +860,6 @@ mod tests {
     fn recovers_missing_builtin_skills_from_existing_config() {
         let value = json!({
             "trigger_mouse": true,
-            "trigger_hold": true,
             "trigger_toggle": true,
             "online_asr_config": {},
             "input_device": "",

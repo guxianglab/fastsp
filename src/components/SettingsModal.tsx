@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+﻿import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Copy, Loader2, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { api, AppConfig, AudioDevice, LlmConfig, PromptProfile, ProxyConfig, SkillConfig, events } from "../lib/api";
 
@@ -388,19 +388,13 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
                   <div className="space-y-3">
                     <ToggleRow
                       title="鼠标中键"
-                      desc="按住说话，松开转写"
+                      desc="单击切换听写，长按执行技能"
                       active={config.trigger_mouse}
                       onToggle={() => updateConfig("trigger_mouse", !config.trigger_mouse)}
                     />
                     <ToggleRow
                       title="右 Alt"
-                      desc="按一次开始，再按一次结束"
-                      active={config.trigger_hold}
-                      onToggle={() => updateConfig("trigger_hold", !config.trigger_hold)}
-                    />
-                    <ToggleRow
-                      title="Ctrl + Win"
-                      desc="只执行技能，不粘贴文本"
+                      desc="单击切换听写，长按执行技能"
                       active={config.trigger_toggle}
                       onToggle={() => updateConfig("trigger_toggle", !config.trigger_toggle)}
                     />
@@ -875,3 +869,4 @@ function SkillCard({
     </div>
   );
 }
+

@@ -61,7 +61,6 @@ export interface SkillConfig {
 
 export interface AppConfig {
     trigger_mouse: boolean;
-    trigger_hold: boolean;
     trigger_toggle: boolean;
     online_asr_config: OnlineAsrConfig;
     input_device: string;

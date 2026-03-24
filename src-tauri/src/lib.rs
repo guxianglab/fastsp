@@ -1,4 +1,4 @@
-mod asr;
+﻿mod asr;
 mod audio;
 mod http_client;
 mod input_listener;
@@ -34,6 +34,12 @@ use arboard::Clipboard;
 
 // Monotonic id to correlate a single transcription pipeline across logs.
 static TRANSCRIPTION_SEQ: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RecordingMode {
+    Dictation,
+    Skill,
+}
 
 fn preview_text(s: &str, max_chars: usize) -> String {
     // Keep logs readable: single-line preview with a hard cap.
@@ -258,7 +264,7 @@ fn process_transcription<R: Runtime>(
     });
 }
 
-/// Process transcription for skill trigger (Ctrl+Win)
+/// Process transcription for a skill trigger
 /// Matches recognized text against skill keywords and executes matching skill
 fn process_transcription_for_skill<R: Runtime>(
     app_handle: &AppHandle<R>,
@@ -734,6 +740,15 @@ fn stop_and_transcribe<R: Runtime>(
     }
 }
 
+fn cancel_pending_llm(llm_cancel: &LlmCancelState, log_tag: &str) {
+    if let Ok(guard) = llm_cancel.lock() {
+        if let Some(token) = guard.as_ref() {
+            println!("[{}] Cancelling ongoing LLM request", log_tag);
+            token.cancel();
+        }
+    }
+}
+
 #[tauri::command]
 fn get_config(state: tauri::State<StorageState>) -> AppConfig {
     state.load_config()
@@ -752,8 +767,7 @@ fn save_config(
 ) -> Result<(), String> {
     // Update listener flags immediately (hot-reload)
     listener.enable_mouse.store(config.trigger_mouse, std::sync::atomic::Ordering::Relaxed);
-    listener.enable_hold.store(config.trigger_hold, std::sync::atomic::Ordering::Relaxed);
-    listener.enable_toggle.store(config.trigger_toggle, std::sync::atomic::Ordering::Relaxed);
+    listener.enable_alt.store(config.trigger_toggle, std::sync::atomic::Ordering::Relaxed);
     
     state.save_config(&config).map_err(|e| e.to_string())
 }
@@ -951,8 +965,7 @@ pub fn run() {
             let input_listener = input_listener::InputListener::new();
             // Update listener flags based on config
             input_listener.enable_mouse.store(config.trigger_mouse, std::sync::atomic::Ordering::Relaxed);
-            input_listener.enable_hold.store(config.trigger_hold, std::sync::atomic::Ordering::Relaxed);
-            input_listener.enable_toggle.store(config.trigger_toggle, std::sync::atomic::Ordering::Relaxed);
+            input_listener.enable_alt.store(config.trigger_toggle, std::sync::atomic::Ordering::Relaxed);
 
             // Channel for Input Events
             let (tx, rx) = std::sync::mpsc::channel();
@@ -972,59 +985,16 @@ pub fn run() {
             let llm_cancel_for_thread = llm_cancel_state.clone();
             #[allow(unreachable_code)]
             std::thread::spawn(move || {
-                let mut is_recording = false;
+                let mut recording_mode: Option<RecordingMode> = None;
                 let mut streaming_session: Option<asr::StreamingSession> = None;
 
                 for event in rx {
                     match event {
-                        input_listener::InputEvent::Start => {
-                            // If LLM is processing, cancel it first to allow new recording
-                            if processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
-                                if let Ok(guard) = llm_cancel_for_thread.lock() {
-                                    if let Some(token) = guard.as_ref() {
-                                        println!("[START] Cancelling ongoing LLM request to start new recording");
-                                        token.cancel();
-                                    }
-                                }
-                                // Wait a bit for the cancellation to take effect
-                                std::thread::sleep(std::time::Duration::from_millis(50));
-                            }
-
-                            if !is_recording && !processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
-                                if begin_recording_session(&app_handle, &mut streaming_session) {
-                                    is_recording = true;
-                                }
-                            }
-                        },
-                        input_listener::InputEvent::Stop => {
-                            if is_recording && !processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
-                                is_recording = false;
-
-                                if processing_for_thread
-                                    .compare_exchange(
-                                        false,
-                                        true,
-                                        std::sync::atomic::Ordering::SeqCst,
-                                        std::sync::atomic::Ordering::SeqCst,
-                                    )
-                                    .is_err()
-                                {
-                                    continue;
-                                }
-
-                                stop_and_transcribe(
-                                    &app_handle,
-                                    &mut streaming_session,
-                                    processing_for_thread.clone(),
-                                    llm_cancel_for_thread.clone(),
-                                    "STOP",
-                                    false,
-                                );
-                            }
-                        },
                         input_listener::InputEvent::Toggle => {
-                            if is_recording && !processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
-                                is_recording = false;
+                            if recording_mode == Some(RecordingMode::Dictation)
+                                && !processing_for_thread.load(std::sync::atomic::Ordering::SeqCst)
+                            {
+                                recording_mode = None;
 
                                 if processing_for_thread
                                     .compare_exchange(
@@ -1045,42 +1015,71 @@ pub fn run() {
                                     "TOGGLE",
                                     false,
                                 );
-                            } else if !is_recording && !processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
+                            } else if recording_mode.is_none() {
+                                if processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
+                                    cancel_pending_llm(&llm_cancel_for_thread, "TOGGLE");
+                                    std::thread::sleep(std::time::Duration::from_millis(50));
+                                }
+
+                                if processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
+                                    continue;
+                                }
+
                                 if begin_recording_session(&app_handle, &mut streaming_session) {
-                                    is_recording = true;
+                                    recording_mode = Some(RecordingMode::Dictation);
                                 }
                             }
                         },
                         input_listener::InputEvent::MouseMove => {
                             // Mouse movement detected - indicator stays at bottom-center
-                        }
-                        input_listener::InputEvent::StopForSkill => {
-                            // Ctrl+Win 释放 - 用于技能触发
-                            if is_recording && !processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
-                                is_recording = false;
-
-                                if processing_for_thread
-                                    .compare_exchange(
-                                        false,
-                                        true,
-                                        std::sync::atomic::Ordering::SeqCst,
-                                        std::sync::atomic::Ordering::SeqCst,
-                                    )
-                                    .is_err()
-                                {
-                                    continue;
-                                }
-
-                                stop_and_transcribe(
-                                    &app_handle,
-                                    &mut streaming_session,
-                                    processing_for_thread.clone(),
-                                    llm_cancel_for_thread.clone(),
-                                    "SKILL",
-                                    true,
-                                );
+                        },
+                        input_listener::InputEvent::StartSkill => {
+                            if recording_mode.is_some() {
                                 continue;
                             }
+
+                            if processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
+                                cancel_pending_llm(&llm_cancel_for_thread, "SKILL");
+                                std::thread::sleep(std::time::Duration::from_millis(50));
+                            }
+
+                            if processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
+                                continue;
+                            }
+
+                            if begin_recording_session(&app_handle, &mut streaming_session) {
+                                recording_mode = Some(RecordingMode::Skill);
+                            }
+                        },
+                        input_listener::InputEvent::StopSkill => {
+                            if recording_mode != Some(RecordingMode::Skill)
+                                || processing_for_thread.load(std::sync::atomic::Ordering::SeqCst)
+                            {
+                                continue;
+                            }
+
+                            recording_mode = None;
+
+                            if processing_for_thread
+                                .compare_exchange(
+                                    false,
+                                    true,
+                                    std::sync::atomic::Ordering::SeqCst,
+                                    std::sync::atomic::Ordering::SeqCst,
+                                )
+                                .is_err()
+                            {
+                                continue;
+                            }
+
+                            stop_and_transcribe(
+                                &app_handle,
+                                &mut streaming_session,
+                                processing_for_thread.clone(),
+                                llm_cancel_for_thread.clone(),
+                                "SKILL",
+                                true,
+                            );
                         }
                     }
                 }
@@ -1306,3 +1305,4 @@ mod tests {
         assert_eq!(after_switch.llm_config.active_profile_id, "email");
     }
 }
+

@@ -67,7 +67,6 @@
 ```json
 {
   "trigger_mouse": true,
-  "trigger_hold": true,
   "trigger_toggle": true,
   "online_asr_config": {
     "app_key": "",
@@ -161,9 +160,13 @@ npm run tauri build
 
 ## 常见问题（FAQ）
 
-### 1) 为什么 Ctrl+Win 没有上屏文字？
+### 1) 现在触发方式怎么用？
 
-这是 **Skills 模式**：Ctrl+Win 触发会把识别文本用于匹配技能并执行动作，默认**不做上屏**。要听写请用鼠标中键或右 Alt。
+鼠标中键和右 Alt 现在统一成同一套交互：
+
+- 单击一次开始流式听写
+- 再单击一次结束听写
+- 长按说技能命令，松开后执行技能
 
 ### 2) 在线 ASR 连接失败？
 
