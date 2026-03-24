@@ -19,7 +19,8 @@ export interface SceneExample {
 export interface PromptProfile {
     id: string;
     name: string;
-    task_kind: string;
+    voice_aliases: string[];
+    preset_key: string;
     goal: string;
     tone: string;
     format_style: string;
@@ -76,6 +77,11 @@ export interface HistoryItem {
     duration_ms: number;
 }
 
+export interface VoiceCommandFeedback {
+    level: "success" | "error" | "info";
+    message: string;
+}
+
 export const api = {
     getConfig: () => invoke<AppConfig>("get_config"),
     takeRuntimeNotice: () => invoke<string | null>("take_runtime_notice"),
@@ -91,6 +97,7 @@ export const api = {
     stopAudioTest: () => invoke("stop_audio_test"),
     testLlmConnection: (config: LlmConfig, proxy: ProxyConfig) => invoke<string>("test_llm_connection", { config, proxy }),
     getDefaultSceneTemplate: () => invoke<PromptProfile>("get_default_scene_template"),
+    getDefaultSceneProfiles: () => invoke<PromptProfile[]>("get_default_scene_profiles"),
 };
 
 export const events = {
@@ -102,4 +109,7 @@ export const events = {
     onLlmError: (callback: (message: string) => void) => listen<string>("llm_error", (e) => callback(e.payload)),
     onMousePosition: (callback: (pos: { x: number; y: number }) => void) => listen<{ x: number; y: number }>("mouse_position", (e) => callback(e.payload)),
     onStreamUpdate: (callback: (text: string) => void) => listen<string>("stream_update", (e) => callback(e.payload)),
+    onConfigUpdated: (callback: (config: AppConfig) => void) => listen<AppConfig>("config_updated", (e) => callback(e.payload)),
+    onVoiceCommandFeedback: (callback: (payload: VoiceCommandFeedback) => void) =>
+        listen<VoiceCommandFeedback>("voice_command_feedback", (e) => callback(e.payload)),
 };

@@ -280,25 +280,60 @@ fn process_transcription_for_skill<R: Runtime>(
     );
 
     let storage = app_handle.state::<StorageState>();
-    let config = storage.load_config();
+    let mut config = storage.load_config();
     let skills_config = config.skills.clone();
 
     // Try to match one or more skills in the transcript.
     let matched_skills = skills::match_skills(&text, &skills_config);
     if !matched_skills.is_empty() {
+        let matched_ids: Vec<&str> = matched_skills
+            .iter()
+            .map(|skill_match| skill_match.skill_id.as_str())
+            .collect();
         println!(
             "[SKILL] #{} Matched skills: {}",
             seq_id,
-            matched_skills.join(", ")
+            matched_ids.join(", ")
         );
 
-        for skill_id in matched_skills {
-            match skills::execute_skill(&skill_id) {
+        for (index, skill_match) in matched_skills.iter().enumerate() {
+            let next_match = matched_skills.get(index + 1);
+
+            if skills::is_config_skill(&skill_match.skill_id) {
+                match execute_config_skill(app_handle, &text, skill_match, next_match, &mut config) {
+                    Ok(_) => {
+                        println!(
+                            "[SKILL] #{} Executed config skill successfully: {}",
+                            seq_id, skill_match.skill_id
+                        );
+                    }
+                    Err(e) => {
+                        emit_voice_command_feedback(
+                            app_handle,
+                            "error",
+                            format!("配置更新失败：{}", e),
+                        );
+                        eprintln!(
+                            "[SKILL] #{} Config skill execution failed for {}: {}",
+                            seq_id, skill_match.skill_id, e
+                        );
+                    }
+                }
+                continue;
+            }
+
+            match skills::execute_skill(&skill_match.skill_id) {
                 Ok(_) => {
-                    println!("[SKILL] #{} Executed successfully: {}", seq_id, skill_id);
+                    println!(
+                        "[SKILL] #{} Executed successfully: {}",
+                        seq_id, skill_match.skill_id
+                    );
                 }
                 Err(e) => {
-                    eprintln!("[SKILL] #{} Execution failed for {}: {}", seq_id, skill_id, e);
+                    eprintln!(
+                        "[SKILL] #{} Execution failed for {}: {}",
+                        seq_id, skill_match.skill_id, e
+                    );
                 }
             }
         }
@@ -388,6 +423,163 @@ fn output_text(text: &str, seq_id: u64) {
 #[derive(Serialize)]
 pub struct AsrStatus {
     configured: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct VoiceCommandFeedback {
+    level: String,
+    message: String,
+}
+
+#[derive(Clone, Debug)]
+enum ConfigSkillPlan {
+    Save {
+        config: AppConfig,
+        feedback: VoiceCommandFeedback,
+    },
+    Feedback(VoiceCommandFeedback),
+}
+
+fn emit_voice_command_feedback<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    level: &str,
+    message: impl Into<String>,
+) {
+    app_handle
+        .emit(
+            "voice_command_feedback",
+            VoiceCommandFeedback {
+                level: level.to_string(),
+                message: message.into(),
+            },
+        )
+        .ok();
+}
+
+fn save_and_emit_config_update<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    config: &AppConfig,
+) -> Result<(), String> {
+    let storage = app_handle.state::<StorageState>();
+    storage.save_config(config).map_err(|e| e.to_string())?;
+    app_handle.emit("config_updated", config.clone()).ok();
+    Ok(())
+}
+
+fn plan_config_skill_update(
+    transcript: &str,
+    skill_match: &skills::SkillMatch,
+    next_match: Option<&skills::SkillMatch>,
+    config: &AppConfig,
+) -> Result<ConfigSkillPlan, String> {
+    match skill_match.skill_id.as_str() {
+        skills::ENABLE_POLISH_SKILL_ID => {
+            if config.llm_config.enabled {
+                return Ok(ConfigSkillPlan::Feedback(VoiceCommandFeedback {
+                    level: "info".to_string(),
+                    message: "润色已经处于启用状态".to_string(),
+                }));
+            }
+
+            let mut next_config = config.clone();
+            next_config.llm_config.enabled = true;
+            Ok(ConfigSkillPlan::Save {
+                config: next_config,
+                feedback: VoiceCommandFeedback {
+                    level: "success".to_string(),
+                    message: "已启用润色".to_string(),
+                },
+            })
+        }
+        skills::DISABLE_POLISH_SKILL_ID => {
+            if !config.llm_config.enabled {
+                return Ok(ConfigSkillPlan::Feedback(VoiceCommandFeedback {
+                    level: "info".to_string(),
+                    message: "润色已经处于关闭状态".to_string(),
+                }));
+            }
+
+            let mut next_config = config.clone();
+            next_config.llm_config.enabled = false;
+            Ok(ConfigSkillPlan::Save {
+                config: next_config,
+                feedback: VoiceCommandFeedback {
+                    level: "success".to_string(),
+                    message: "已关闭润色".to_string(),
+                },
+            })
+        }
+        skills::SWITCH_POLISH_SCENE_SKILL_ID => {
+            let scene_query = skills::extract_scene_query(transcript, skill_match, next_match);
+            if scene_query.is_empty() {
+                return Ok(ConfigSkillPlan::Feedback(VoiceCommandFeedback {
+                    level: "error".to_string(),
+                    message: "未识别到要切换的润色场景".to_string(),
+                }));
+            }
+
+            match skills::resolve_scene(&config.llm_config.profiles, &scene_query) {
+                skills::SceneResolveResult::Unique {
+                    profile_id,
+                    profile_name,
+                } => {
+                    if config.llm_config.active_profile_id == profile_id {
+                        return Ok(ConfigSkillPlan::Feedback(VoiceCommandFeedback {
+                            level: "info".to_string(),
+                            message: format!("当前已经是场景“{}”", profile_name),
+                        }));
+                    }
+
+                    let mut next_config = config.clone();
+                    next_config.llm_config.active_profile_id = profile_id;
+                    Ok(ConfigSkillPlan::Save {
+                        config: next_config,
+                        feedback: VoiceCommandFeedback {
+                            level: "success".to_string(),
+                            message: format!("已切换到场景“{}”", profile_name),
+                        },
+                    })
+                }
+                skills::SceneResolveResult::None => Ok(ConfigSkillPlan::Feedback(VoiceCommandFeedback {
+                    level: "error".to_string(),
+                    message: format!("未找到匹配场景：{}", scene_query),
+                })),
+                skills::SceneResolveResult::Ambiguous(names) => {
+                    Ok(ConfigSkillPlan::Feedback(VoiceCommandFeedback {
+                        level: "error".to_string(),
+                        message: format!("匹配到多个场景：{}", names.join("、")),
+                    }))
+                }
+            }
+        }
+        _ => Err(format!("Unsupported config skill: {}", skill_match.skill_id)),
+    }
+}
+
+fn execute_config_skill<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    transcript: &str,
+    skill_match: &skills::SkillMatch,
+    next_match: Option<&skills::SkillMatch>,
+    config: &mut AppConfig,
+) -> Result<(), String> {
+    match plan_config_skill_update(transcript, skill_match, next_match, config)? {
+        ConfigSkillPlan::Save {
+            config: next_config,
+            feedback,
+        } => {
+            save_and_emit_config_update(app_handle, &next_config)?;
+            *config = next_config;
+            let VoiceCommandFeedback { level, message } = feedback;
+            emit_voice_command_feedback(app_handle, &level, message);
+            Ok(())
+        }
+        ConfigSkillPlan::Feedback(feedback) => {
+            let VoiceCommandFeedback { level, message } = feedback;
+            emit_voice_command_feedback(app_handle, &level, message);
+            Ok(())
+        }
+    }
 }
 
 
@@ -652,7 +844,12 @@ async fn test_llm_connection(config: LlmConfig, proxy: ProxyConfig) -> Result<St
 
 #[tauri::command]
 fn get_default_scene_template() -> PromptProfile {
-    storage::default_scene_template()
+    storage::blank_scene_template()
+}
+
+#[tauri::command]
+fn get_default_scene_profiles() -> Vec<PromptProfile> {
+    storage::default_scene_profiles()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -903,7 +1100,7 @@ pub fn run() {
             get_asr_status,
             get_input_devices, get_current_input_device, switch_input_device,
             start_audio_test, stop_audio_test,
-            test_llm_connection, get_default_scene_template
+            test_llm_connection, get_default_scene_template, get_default_scene_profiles
         ])
         .on_window_event(|window, event| {
             if window.label() == "main" {
@@ -915,4 +1112,197 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{plan_config_skill_update, AppConfig, ConfigSkillPlan, VoiceCommandFeedback};
+    use crate::skills::{
+        SkillMatch, DISABLE_POLISH_SKILL_ID, ENABLE_POLISH_SKILL_ID, SWITCH_POLISH_SCENE_SKILL_ID,
+    };
+    use crate::storage::PromptProfile;
+
+    fn expect_saved_config(plan: ConfigSkillPlan) -> (AppConfig, VoiceCommandFeedback) {
+        match plan {
+            ConfigSkillPlan::Save { config, feedback } => (config, feedback),
+            ConfigSkillPlan::Feedback(feedback) => {
+                panic!("expected saved config, got feedback: {:?}", feedback)
+            }
+        }
+    }
+
+    fn profile(id: &str, name: &str, voice_aliases: &[&str]) -> PromptProfile {
+        PromptProfile {
+            id: id.to_string(),
+            name: name.to_string(),
+            voice_aliases: voice_aliases.iter().map(|alias| alias.to_string()).collect(),
+            ..PromptProfile::new_default()
+        }
+    }
+
+    #[test]
+    fn enable_polish_plans_enabled_config() {
+        let config = AppConfig::default();
+        let plan = plan_config_skill_update(
+            "启用润色",
+            &SkillMatch {
+                skill_id: ENABLE_POLISH_SKILL_ID.to_string(),
+                keyword: "启用润色".to_string(),
+                start: 0,
+                end: "启用润色".len(),
+            },
+            None,
+            &config,
+        )
+        .expect("plan should succeed");
+
+        let (next_config, feedback) = expect_saved_config(plan);
+        assert!(next_config.llm_config.enabled);
+        assert_eq!(feedback.message, "已启用润色");
+    }
+
+    #[test]
+    fn disable_polish_plans_disabled_config() {
+        let mut config = AppConfig::default();
+        config.llm_config.enabled = true;
+
+        let plan = plan_config_skill_update(
+            "关闭润色",
+            &SkillMatch {
+                skill_id: DISABLE_POLISH_SKILL_ID.to_string(),
+                keyword: "关闭润色".to_string(),
+                start: 0,
+                end: "关闭润色".len(),
+            },
+            None,
+            &config,
+        )
+        .expect("plan should succeed");
+
+        let (next_config, feedback) = expect_saved_config(plan);
+        assert!(!next_config.llm_config.enabled);
+        assert_eq!(feedback.message, "已关闭润色");
+    }
+
+    #[test]
+    fn switch_scene_matches_voice_alias() {
+        let mut config = AppConfig::default();
+        config.llm_config.profiles = vec![
+            profile("default", "默认", &[]),
+            profile("email", "邮件写作", &["邮件"]),
+        ];
+        config.llm_config.active_profile_id = "default".to_string();
+
+        let transcript = "切换到邮件";
+        let plan = plan_config_skill_update(
+            transcript,
+            &SkillMatch {
+                skill_id: SWITCH_POLISH_SCENE_SKILL_ID.to_string(),
+                keyword: "切换到".to_string(),
+                start: 0,
+                end: "切换到".len(),
+            },
+            None,
+            &config,
+        )
+        .expect("plan should succeed");
+
+        let (next_config, feedback) = expect_saved_config(plan);
+        assert_eq!(next_config.llm_config.active_profile_id, "email");
+        assert_eq!(feedback.message, "已切换到场景“邮件写作”");
+    }
+
+    #[test]
+    fn switch_scene_falls_back_to_profile_name() {
+        let mut config = AppConfig::default();
+        config.llm_config.profiles = vec![profile("meeting", "会议纪要", &[])];
+        config.llm_config.active_profile_id = "meeting".to_string();
+
+        let plan = plan_config_skill_update(
+            "切换到会议纪要模式",
+            &SkillMatch {
+                skill_id: SWITCH_POLISH_SCENE_SKILL_ID.to_string(),
+                keyword: "切换到".to_string(),
+                start: 0,
+                end: "切换到".len(),
+            },
+            None,
+            &config,
+        )
+        .expect("plan should succeed");
+
+        match plan {
+            ConfigSkillPlan::Feedback(feedback) => {
+                assert_eq!(feedback.message, "当前已经是场景“会议纪要”");
+            }
+            ConfigSkillPlan::Save { .. } => panic!("expected no-op feedback when already active"),
+        }
+    }
+
+    #[test]
+    fn switch_scene_reports_alias_conflicts() {
+        let mut config = AppConfig::default();
+        config.llm_config.profiles = vec![
+            profile("email", "邮件", &["客服"]),
+            profile("support", "客服回复", &["客服"]),
+        ];
+
+        let plan = plan_config_skill_update(
+            "切换到客服",
+            &SkillMatch {
+                skill_id: SWITCH_POLISH_SCENE_SKILL_ID.to_string(),
+                keyword: "切换到".to_string(),
+                start: 0,
+                end: "切换到".len(),
+            },
+            None,
+            &config,
+        )
+        .expect("plan should succeed");
+
+        match plan {
+            ConfigSkillPlan::Feedback(feedback) => {
+                assert_eq!(feedback.level, "error");
+                assert!(feedback.message.contains("匹配到多个场景"));
+            }
+            ConfigSkillPlan::Save { .. } => panic!("expected ambiguity feedback"),
+        }
+    }
+
+    #[test]
+    fn combined_enable_and_switch_commands_apply_in_order() {
+        let mut config = AppConfig::default();
+        config.llm_config.enabled = false;
+        config.llm_config.profiles = vec![
+            profile("default", "默认", &[]),
+            profile("email", "邮件", &["邮件"]),
+        ];
+        config.llm_config.active_profile_id = "default".to_string();
+
+        let transcript = "启用润色切换到邮件";
+        let enable_match = SkillMatch {
+            skill_id: ENABLE_POLISH_SKILL_ID.to_string(),
+            keyword: "启用润色".to_string(),
+            start: 0,
+            end: "启用润色".len(),
+        };
+        let switch_match = SkillMatch {
+            skill_id: SWITCH_POLISH_SCENE_SKILL_ID.to_string(),
+            keyword: "切换到".to_string(),
+            start: "启用润色".len(),
+            end: "启用润色切换到".len(),
+        };
+
+        let (after_enable, _) = expect_saved_config(
+            plan_config_skill_update(transcript, &enable_match, Some(&switch_match), &config)
+                .expect("enable plan should succeed"),
+        );
+        let (after_switch, _) = expect_saved_config(
+            plan_config_skill_update(transcript, &switch_match, None, &after_enable)
+                .expect("switch plan should succeed"),
+        );
+
+        assert!(after_switch.llm_config.enabled);
+        assert_eq!(after_switch.llm_config.active_profile_id, "email");
+    }
 }
