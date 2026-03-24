@@ -84,13 +84,17 @@ impl AsrService {
                     headers.insert("X-Api-Connect-Id", HeaderValue::from_str(&uuid::Uuid::new_v4().to_string()).unwrap());
                 }
 
-                let (ws_stream, _response) = match connect_ws(request, &proxy).await {
+                let (ws_stream, response) = match connect_ws(request, &proxy).await {
                     Ok(res) => res,
                     Err(e) => {
                         eprintln!("[ASR] WebSocket connection failed: {}", e);
                         return String::new();
                     }
                 };
+
+                if let Some(logid) = response.headers().get("X-Tt-Logid").and_then(|v| v.to_str().ok()) {
+                    println!("[ASR] Connected, X-Tt-Logid={}", logid);
+                }
 
                 let (mut write, mut read) = ws_stream.split();
 
@@ -209,34 +213,22 @@ impl AsrService {
                     }
                 });
 
+                let mut pending_chunk: Option<Vec<f32>> = None;
                 while let Some(audio_chunk) = async_rx.recv().await {
-                    let pcm = float_to_pcm16(&audio_chunk);
-                    let mut pcm_bytes = Vec::with_capacity(pcm.len() * 2);
-                    for sample in pcm {
-                        pcm_bytes.extend_from_slice(&sample.to_le_bytes()); // pcm is LE
+                    if let Some(previous_chunk) = pending_chunk.replace(audio_chunk) {
+                        let msg = build_audio_message(&previous_chunk, seq, false);
+                        if write.send(Message::Binary(msg.into())).await.is_err() {
+                            break;
+                        }
+                        seq += 1;
                     }
-
-                    let compressed = gzip_compress(&pcm_bytes);
-                    let mut msg = Vec::new();
-                    msg.extend_from_slice(&[0x11, 0x21, 0x01, 0x00]);
-                    msg.extend_from_slice(&seq.to_be_bytes());
-                    let payload_size = compressed.len() as u32;
-                    msg.extend_from_slice(&payload_size.to_be_bytes());
-                    msg.extend_from_slice(&compressed);
-
-                    if write.send(Message::Binary(msg.into())).await.is_err() {
-                        break;
-                    }
-                    seq += 1;
                 }
 
-                // Send EOF packet
-                let mut msg = Vec::new();
-                msg.extend_from_slice(&[0x11, 0x23, 0x01, 0x00]);
-                msg.extend_from_slice(&(-seq).to_be_bytes());
-                msg.extend_from_slice(&0u32.to_be_bytes());
-
-                let _ = write.send(Message::Binary(msg.into())).await;
+                let final_msg = match pending_chunk {
+                    Some(last_chunk) => build_audio_message(&last_chunk, seq, true),
+                    None => build_empty_last_audio_message(seq),
+                };
+                let _ = write.send(Message::Binary(final_msg.into())).await;
                 
                 // Wait for read to finish and return text
                 read_task.await.unwrap_or_default()
@@ -413,6 +405,34 @@ fn gzip_decompress(data: &[u8]) -> Vec<u8> {
     let mut result = Vec::new();
     let _ = decoder.read_to_end(&mut result);
     result
+}
+
+fn build_audio_message(samples: &[f32], seq: i32, is_last: bool) -> Vec<u8> {
+    let pcm = float_to_pcm16(samples);
+    let mut pcm_bytes = Vec::with_capacity(pcm.len() * 2);
+    for sample in pcm {
+        pcm_bytes.extend_from_slice(&sample.to_le_bytes());
+    }
+    build_audio_message_from_pcm_bytes(&pcm_bytes, seq, is_last)
+}
+
+fn build_empty_last_audio_message(seq: i32) -> Vec<u8> {
+    build_audio_message_from_pcm_bytes(&[], seq, true)
+}
+
+fn build_audio_message_from_pcm_bytes(pcm_bytes: &[u8], seq: i32, is_last: bool) -> Vec<u8> {
+    let compressed = gzip_compress(pcm_bytes);
+    let mut msg = Vec::new();
+    msg.extend_from_slice(if is_last {
+        &[0x11, 0x23, 0x01, 0x00]
+    } else {
+        &[0x11, 0x21, 0x01, 0x00]
+    });
+    msg.extend_from_slice(&(if is_last { -seq } else { seq }).to_be_bytes());
+    let payload_size = compressed.len() as u32;
+    msg.extend_from_slice(&payload_size.to_be_bytes());
+    msg.extend_from_slice(&compressed);
+    msg
 }
 
 fn float_to_pcm16(samples: &[f32]) -> Vec<i16> {
