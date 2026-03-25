@@ -10,11 +10,11 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::time::{timeout, Duration};
-use tokio_tungstenite::tungstenite::http::header::HeaderValue;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::tungstenite::{self, Message};
-use tokio_tungstenite::client_async_tls_with_config;
 use tokio_socks::tcp::{Socks4Stream, Socks5Stream};
+use tokio_tungstenite::client_async_tls_with_config;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::http::header::HeaderValue;
+use tokio_tungstenite::tungstenite::{self, Message};
 
 const ASYNC_URL: &str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async";
 const ASR_CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
@@ -76,34 +76,51 @@ impl AsrService {
                 .enable_all()
                 .build()
                 .unwrap();
-            
+
             rt.block_on(async move {
                 let mut request = ASYNC_URL.into_client_request().unwrap();
                 {
                     let headers = request.headers_mut();
-                    headers.insert("X-Api-App-Key", HeaderValue::from_str(&config.app_key).unwrap());
-                    headers.insert("X-Api-Access-Key", HeaderValue::from_str(&config.access_key).unwrap());
-                    headers.insert("X-Api-Resource-Id", HeaderValue::from_str(&config.resource_id).unwrap());
-                    headers.insert("X-Api-Connect-Id", HeaderValue::from_str(&uuid::Uuid::new_v4().to_string()).unwrap());
+                    headers.insert(
+                        "X-Api-App-Key",
+                        HeaderValue::from_str(&config.app_key).unwrap(),
+                    );
+                    headers.insert(
+                        "X-Api-Access-Key",
+                        HeaderValue::from_str(&config.access_key).unwrap(),
+                    );
+                    headers.insert(
+                        "X-Api-Resource-Id",
+                        HeaderValue::from_str(&config.resource_id).unwrap(),
+                    );
+                    headers.insert(
+                        "X-Api-Connect-Id",
+                        HeaderValue::from_str(&uuid::Uuid::new_v4().to_string()).unwrap(),
+                    );
                 }
 
-                let (ws_stream, response) = match timeout(ASR_CONNECT_TIMEOUT, connect_ws(request, &proxy)).await {
-                    Ok(Ok(res)) => res,
-                    Ok(Err(e)) => {
-                        eprintln!("[ASR] WebSocket connection failed: {}", e);
-                        return Err(e);
-                    }
-                    Err(_) => {
-                        let err = anyhow!(
-                            "ASR websocket connection timed out after {}s",
-                            ASR_CONNECT_TIMEOUT.as_secs()
-                        );
-                        eprintln!("[ASR] {}", err);
-                        return Err(err);
-                    }
-                };
+                let (ws_stream, response) =
+                    match timeout(ASR_CONNECT_TIMEOUT, connect_ws(request, &proxy)).await {
+                        Ok(Ok(res)) => res,
+                        Ok(Err(e)) => {
+                            eprintln!("[ASR] WebSocket connection failed: {}", e);
+                            return Err(e);
+                        }
+                        Err(_) => {
+                            let err = anyhow!(
+                                "ASR websocket connection timed out after {}s",
+                                ASR_CONNECT_TIMEOUT.as_secs()
+                            );
+                            eprintln!("[ASR] {}", err);
+                            return Err(err);
+                        }
+                    };
 
-                if let Some(logid) = response.headers().get("X-Tt-Logid").and_then(|v| v.to_str().ok()) {
+                if let Some(logid) = response
+                    .headers()
+                    .get("X-Tt-Logid")
+                    .and_then(|v| v.to_str().ok())
+                {
                     println!("[ASR] Connected, X-Tt-Logid={}", logid);
                 }
 
@@ -130,7 +147,8 @@ impl AsrService {
                         "result_type": "full",
                         "enable_nonstream": true
                     }
-                }).to_string();
+                })
+                .to_string();
 
                 let compressed = gzip_compress(req_payload.as_bytes());
                 let mut msg = Vec::new();
@@ -152,13 +170,17 @@ impl AsrService {
                     while let Some(msg) = read.next().await {
                         match msg {
                             Ok(Message::Binary(data)) => {
-                                if data.len() < 4 { continue; }
+                                if data.len() < 4 {
+                                    continue;
+                                }
                                 let header_len = ((data[0] & 0x0F) * 4) as usize;
-                                if data.len() < header_len { continue; }
+                                if data.len() < header_len {
+                                    continue;
+                                }
                                 let msg_type = (data[1] >> 4) & 0x0F;
                                 let flags = data[1] & 0x0F;
                                 let is_compressed = (data[2] & 0x0F) == 0b0001;
-                                
+
                                 let mut offset = header_len;
                                 if msg_type == 0b1111 {
                                     // Error message includes a 4-byte Error code
@@ -168,24 +190,35 @@ impl AsrService {
                                     offset += 4;
                                 }
 
-                                if data.len() < offset + 4 { continue; }
-                                let payload_size = u32::from_be_bytes(data[offset..offset+4].try_into().unwrap()) as usize;
+                                if data.len() < offset + 4 {
+                                    continue;
+                                }
+                                let payload_size = u32::from_be_bytes(
+                                    data[offset..offset + 4].try_into().unwrap(),
+                                ) as usize;
                                 let payload_offset = offset + 4;
-                                
-                                if data.len() < payload_offset + payload_size { continue; }
-                                let payload = &data[payload_offset..payload_offset+payload_size];
-                                
+
+                                if data.len() < payload_offset + payload_size {
+                                    continue;
+                                }
+                                let payload = &data[payload_offset..payload_offset + payload_size];
+
                                 let decompressed = if is_compressed {
                                     gzip_decompress(payload)
                                 } else {
                                     payload.to_vec()
                                 };
 
-                                if msg_type == 0b1001 || msg_type == 0b1011 { // Full or Partial response
+                                if msg_type == 0b1001 || msg_type == 0b1011 {
+                                    // Full or Partial response
                                     if let Ok(json_str) = String::from_utf8(decompressed) {
-                                        if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                                        if let Ok(json_val) =
+                                            serde_json::from_str::<serde_json::Value>(&json_str)
+                                        {
                                             if let Some(result) = json_val.get("result") {
-                                                if let Some(text) = result.get("text").and_then(|t| t.as_str()) {
+                                                if let Some(text) =
+                                                    result.get("text").and_then(|t| t.as_str())
+                                                {
                                                     latest_text = text.to_string();
                                                     if msg_type == 0b1001 {
                                                         final_text = latest_text.clone();
@@ -195,7 +228,8 @@ impl AsrService {
                                             }
                                         }
                                     }
-                                } else if msg_type == 0b1111 { // Error
+                                } else if msg_type == 0b1111 {
+                                    // Error
                                     let msg_str = String::from_utf8_lossy(&decompressed);
                                     eprintln!("[ASR] Server error: {}", msg_str);
                                 }
@@ -241,7 +275,7 @@ impl AsrService {
                 };
                 let _ = write.send(Message::Binary(final_msg.into())).await;
                 let _ = write.close().await;
-                
+
                 // Once the last audio packet is sent, the server should finish quickly.
                 match timeout(ASR_FINAL_RESPONSE_TIMEOUT, read_task).await {
                     Ok(join_result) => Ok(join_result.unwrap_or_default()),
@@ -297,11 +331,17 @@ async fn connect_stream(url: &str, proxy: &crate::storage::ProxyConfig) -> Resul
         "http" => connect_http_proxy(&proxy_url, &host, port).await,
         "socks5" | "socks5h" => connect_socks5_proxy(&proxy_url, &host, port).await,
         "socks4" | "socks4a" => connect_socks4_proxy(&proxy_url, &host, port).await,
-        scheme => Err(anyhow!("Unsupported proxy scheme for ASR websocket: {scheme}")),
+        scheme => Err(anyhow!(
+            "Unsupported proxy scheme for ASR websocket: {scheme}"
+        )),
     }
 }
 
-async fn connect_http_proxy(proxy_url: &reqwest::Url, host: &str, port: u16) -> Result<BoxedStream> {
+async fn connect_http_proxy(
+    proxy_url: &reqwest::Url,
+    host: &str,
+    port: u16,
+) -> Result<BoxedStream> {
     let proxy_addr = format!(
         "{}:{}",
         proxy_url
@@ -318,7 +358,11 @@ async fn connect_http_proxy(proxy_url: &reqwest::Url, host: &str, port: u16) -> 
     );
 
     if !proxy_url.username().is_empty() || proxy_url.password().is_some() {
-        let credentials = format!("{}:{}", proxy_url.username(), proxy_url.password().unwrap_or(""));
+        let credentials = format!(
+            "{}:{}",
+            proxy_url.username(),
+            proxy_url.password().unwrap_or("")
+        );
         let encoded = base64::engine::general_purpose::STANDARD.encode(credentials);
         connect_req.push_str(&format!("Proxy-Authorization: Basic {encoded}\r\n"));
     }
@@ -352,7 +396,11 @@ async fn connect_http_proxy(proxy_url: &reqwest::Url, host: &str, port: u16) -> 
     Ok(Box::new(stream))
 }
 
-async fn connect_socks5_proxy(proxy_url: &reqwest::Url, host: &str, port: u16) -> Result<BoxedStream> {
+async fn connect_socks5_proxy(
+    proxy_url: &reqwest::Url,
+    host: &str,
+    port: u16,
+) -> Result<BoxedStream> {
     let proxy_addr = format!(
         "{}:{}",
         proxy_url
@@ -382,7 +430,11 @@ async fn connect_socks5_proxy(proxy_url: &reqwest::Url, host: &str, port: u16) -
     Ok(Box::new(stream))
 }
 
-async fn connect_socks4_proxy(proxy_url: &reqwest::Url, host: &str, port: u16) -> Result<BoxedStream> {
+async fn connect_socks4_proxy(
+    proxy_url: &reqwest::Url,
+    host: &str,
+    port: u16,
+) -> Result<BoxedStream> {
     let proxy_addr = format!(
         "{}:{}",
         proxy_url
@@ -400,8 +452,8 @@ async fn connect_socks4_proxy(proxy_url: &reqwest::Url, host: &str, port: u16) -
             target_addr.as_str(),
             proxy_url.username(),
         )
-            .await?
-            .into_inner()
+        .await?
+        .into_inner()
     } else {
         Socks4Stream::connect(proxy_addr.as_str(), target_addr.as_str())
             .await?
@@ -454,7 +506,8 @@ fn build_audio_message_from_pcm_bytes(pcm_bytes: &[u8], seq: i32, is_last: bool)
 }
 
 fn float_to_pcm16(samples: &[f32]) -> Vec<i16> {
-    samples.iter()
+    samples
+        .iter()
         .map(|&s| {
             let clamped = s.clamp(-1.0, 1.0);
             (clamped * i16::MAX as f32) as i16

@@ -220,12 +220,20 @@ impl PromptProfile {
         Self {
             id: preset.id.to_string(),
             name: preset.name.to_string(),
-            voice_aliases: preset.voice_aliases.iter().map(|alias| alias.to_string()).collect(),
+            voice_aliases: preset
+                .voice_aliases
+                .iter()
+                .map(|alias| alias.to_string())
+                .collect(),
             preset_key: preset.key.to_string(),
             goal: preset.goal.to_string(),
             tone: preset.tone.to_string(),
             format_style: preset.format_style.to_string(),
-            preserve_rules: preset.preserve_rules.iter().map(|rule| rule.to_string()).collect(),
+            preserve_rules: preset
+                .preserve_rules
+                .iter()
+                .map(|rule| rule.to_string())
+                .collect(),
             glossary: Vec::new(),
             examples: Vec::new(),
             advanced_instruction: String::new(),
@@ -335,7 +343,10 @@ impl LlmConfig {
         }
 
         if self.active_profile_id.is_empty()
-            || !self.profiles.iter().any(|profile| profile.id == self.active_profile_id)
+            || !self
+                .profiles
+                .iter()
+                .any(|profile| profile.id == self.active_profile_id)
         {
             self.active_profile_id = self
                 .profiles
@@ -362,7 +373,11 @@ impl LlmConfig {
             changed = true;
         }
 
-        let existing_ids: Vec<String> = self.profiles.iter().map(|profile| profile.id.clone()).collect();
+        let existing_ids: Vec<String> = self
+            .profiles
+            .iter()
+            .map(|profile| profile.id.clone())
+            .collect();
         for preset in BUILTIN_SCENE_PRESETS {
             if existing_ids.iter().any(|id| id == preset.id) {
                 continue;
@@ -641,7 +656,9 @@ impl StorageService {
     }
 }
 
-fn recover_app_config_from_object(mut obj: Map<String, Value>) -> (AppConfig, bool, Option<String>) {
+fn recover_app_config_from_object(
+    mut obj: Map<String, Value>,
+) -> (AppConfig, bool, Option<String>) {
     let mut needs_save = false;
     needs_save |= obj.remove("language").is_some();
     needs_save |= obj.remove("model_version").is_some();
@@ -706,7 +723,10 @@ fn recover_llm_config(value: Option<Value>) -> (LlmConfig, bool, Option<String>)
         return (
             LlmConfig::default(),
             true,
-            Some("LLM settings were invalid and have been reset to a clean default profile.".to_string()),
+            Some(
+                "LLM settings were invalid and have been reset to a clean default profile."
+                    .to_string(),
+            ),
         );
     };
 
@@ -714,7 +734,10 @@ fn recover_llm_config(value: Option<Value>) -> (LlmConfig, bool, Option<String>)
         return (
             LlmConfig::default(),
             true,
-            Some("LLM settings were invalid and have been reset to a clean default profile.".to_string()),
+            Some(
+                "LLM settings were invalid and have been reset to a clean default profile."
+                    .to_string(),
+            ),
         );
     }
 
@@ -889,9 +912,21 @@ mod tests {
 
         assert!(changed);
         assert!(notice.is_none());
-        assert!(config.skills.iter().any(|skill| skill.id == "open_calculator"));
-        assert!(config.skills.iter().any(|skill| skill.id == "enable_polish"));
-        assert!(config.skills.iter().any(|skill| skill.id == "disable_polish"));
-        assert!(config.skills.iter().any(|skill| skill.id == "switch_polish_scene"));
+        assert!(config
+            .skills
+            .iter()
+            .any(|skill| skill.id == "open_calculator"));
+        assert!(config
+            .skills
+            .iter()
+            .any(|skill| skill.id == "enable_polish"));
+        assert!(config
+            .skills
+            .iter()
+            .any(|skill| skill.id == "disable_polish"));
+        assert!(config
+            .skills
+            .iter()
+            .any(|skill| skill.id == "switch_polish_scene"));
     }
 }

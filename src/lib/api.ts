@@ -57,6 +57,30 @@ export interface SkillConfig {
     name: string;
     keywords: string;
     enabled: boolean;
+    sub_commands: SkillSubCommandConfig[];
+    browser_options?: BrowserSkillOptions | null;
+}
+
+export interface SkillSubCommandConfig {
+    id: string;
+    name: string;
+    keywords: string;
+    enabled: boolean;
+}
+
+export interface BrowserSiteConfig {
+    id: string;
+    name: string;
+    aliases: string;
+    url: string;
+    enabled: boolean;
+}
+
+export interface BrowserSkillOptions {
+    llm_site_resolution_enabled: boolean;
+    search_fallback_enabled: boolean;
+    search_url_template: string;
+    sites: BrowserSiteConfig[];
 }
 
 export interface AppConfig {

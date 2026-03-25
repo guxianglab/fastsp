@@ -1,6 +1,17 @@
 ﻿import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronRight, Copy, Loader2, Plus, RotateCcw, Trash2, X } from "lucide-react";
-import { api, AppConfig, AudioDevice, LlmConfig, PromptProfile, ProxyConfig, SkillConfig, events } from "../lib/api";
+import {
+  api,
+  AppConfig,
+  AudioDevice,
+  BrowserSkillOptions,
+  LlmConfig,
+  PromptProfile,
+  ProxyConfig,
+  SkillConfig,
+  SkillSubCommandConfig,
+  events,
+} from "../lib/api";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -49,6 +60,16 @@ const mergeDefaultProfiles = (profiles: PromptProfile[], defaults: PromptProfile
     .map((profile) => cloneProfile(profile));
   return [...profiles, ...restored];
 };
+
+const makeBrowserSiteId = () => `browser_site_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const isBrowserSkill = (skill: SkillConfig) => skill.id === "open_browser";
+
+const ensureBrowserOptions = (skill: SkillConfig): BrowserSkillOptions => ({
+  llm_site_resolution_enabled: skill.browser_options?.llm_site_resolution_enabled ?? true,
+  search_fallback_enabled: skill.browser_options?.search_fallback_enabled ?? true,
+  search_url_template: skill.browser_options?.search_url_template ?? "https://www.bing.com/search?q={query}",
+  sites: skill.browser_options?.sites ?? [],
+});
 
 export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: SettingsModalProps) {
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -159,6 +180,99 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
     updateConfig(
       "skills",
       config.skills.map((skill) => (skill.id === id ? { ...skill, [key]: value } : skill)),
+    );
+  };
+
+  const updateBrowserOptions = (id: string, patch: Partial<BrowserSkillOptions>) => {
+    updateConfig(
+      "skills",
+      config.skills.map((skill) =>
+        skill.id === id
+          ? { ...skill, browser_options: { ...ensureBrowserOptions(skill), ...patch } }
+          : skill,
+      ),
+    );
+  };
+
+  const updateBrowserSubCommand = (
+    skillId: string,
+    commandId: string,
+    patch: Partial<SkillSubCommandConfig>,
+  ) => {
+    updateConfig(
+      "skills",
+      config.skills.map((skill) =>
+        skill.id === skillId
+          ? {
+              ...skill,
+              sub_commands: skill.sub_commands.map((command) =>
+                command.id === commandId ? { ...command, ...patch } : command,
+              ),
+            }
+          : skill,
+      ),
+    );
+  };
+
+  const updateBrowserSite = (skillId: string, siteId: string, patch: Partial<{ name: string; aliases: string; url: string; enabled: boolean }>) => {
+    updateConfig(
+      "skills",
+      config.skills.map((skill) =>
+        skill.id === skillId
+          ? {
+              ...skill,
+              browser_options: {
+                ...ensureBrowserOptions(skill),
+                sites: ensureBrowserOptions(skill).sites.map((site) =>
+                  site.id === siteId ? { ...site, ...patch } : site,
+                ),
+              },
+            }
+          : skill,
+      ),
+    );
+  };
+
+  const addBrowserSite = (skillId: string) => {
+    updateConfig(
+      "skills",
+      config.skills.map((skill) =>
+        skill.id === skillId
+          ? {
+              ...skill,
+              browser_options: {
+                ...ensureBrowserOptions(skill),
+                sites: [
+                  ...ensureBrowserOptions(skill).sites,
+                  {
+                    id: makeBrowserSiteId(),
+                    name: "",
+                    aliases: "",
+                    url: "",
+                    enabled: true,
+                  },
+                ],
+              },
+            }
+          : skill,
+      ),
+    );
+  };
+
+  const removeBrowserSite = (skillId: string, siteId: string) => {
+    updateConfig(
+      "skills",
+      config.skills.map((skill) =>
+        skill.id === skillId
+          ? {
+              ...skill,
+              browser_options: {
+                ...ensureBrowserOptions(skill),
+                sites: ensureBrowserOptions(skill).sites.filter((site) => site.id !== siteId),
+              },
+            }
+          : skill,
+      ),
     );
   };
 
@@ -630,11 +744,16 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
                     {config.skills.map((skill) => (
                       <SkillCard
                         key={skill.id}
-                        name={skill.name}
-                        keywords={skill.keywords}
-                        enabled={skill.enabled}
+                        skill={skill}
                         onToggle={() => updateSkill(skill.id, "enabled", !skill.enabled)}
                         onKeywordsChange={(value) => updateSkill(skill.id, "keywords", value)}
+                        onSubCommandChange={(commandId, patch) =>
+                          updateBrowserSubCommand(skill.id, commandId, patch)
+                        }
+                        onBrowserOptionChange={(patch) => updateBrowserOptions(skill.id, patch)}
+                        onBrowserSiteChange={(siteId, patch) => updateBrowserSite(skill.id, siteId, patch)}
+                        onAddBrowserSite={() => addBrowserSite(skill.id)}
+                        onRemoveBrowserSite={(siteId) => removeBrowserSite(skill.id, siteId)}
                       />
                     ))}
                   </div>
@@ -834,19 +953,31 @@ function PrimaryButton({
 }
 
 function SkillCard({
-  name,
-  keywords,
-  enabled,
+  skill,
   onToggle,
   onKeywordsChange,
+  onSubCommandChange,
+  onBrowserOptionChange,
+  onBrowserSiteChange,
+  onAddBrowserSite,
+  onRemoveBrowserSite,
 }: {
-  name: string;
-  keywords: string;
-  enabled: boolean;
+  skill: SkillConfig;
   onToggle: () => void;
   onKeywordsChange: (value: string) => void;
+  onSubCommandChange: (commandId: string, patch: Partial<SkillSubCommandConfig>) => void;
+  onBrowserOptionChange: (patch: Partial<BrowserSkillOptions>) => void;
+  onBrowserSiteChange: (
+    siteId: string,
+    patch: Partial<{ name: string; aliases: string; url: string; enabled: boolean }>,
+  ) => void;
+  onAddBrowserSite: () => void;
+  onRemoveBrowserSite: (siteId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [subSkillsExpanded, setSubSkillsExpanded] = useState(false);
+  const browserOptions = ensureBrowserOptions(skill);
+  const browserSkill = isBrowserSkill(skill);
 
   return (
     <div className="border-b border-neutral-200">
@@ -860,7 +991,7 @@ function SkillCard({
           ) : (
             <ChevronRight className="h-4 w-4 flex-shrink-0 text-neutral-400" />
           )}
-          <span className="text-sm text-neutral-900">{name}</span>
+          <span className="text-sm text-neutral-900">{skill.name}</span>
         </button>
         <button
           onClick={onToggle}
@@ -869,12 +1000,12 @@ function SkillCard({
           <div className="absolute left-0.5 right-0.5 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-200" />
           <div
             className={`absolute left-0.5 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-900 transition-all duration-200 ease-out ${
-              enabled ? "w-6" : "w-0"
+              skill.enabled ? "w-6" : "w-0"
             }`}
           />
           <div
             className={`absolute top-0 h-4 w-4 transition-all duration-200 ease-out ${
-              enabled
+              skill.enabled
                 ? "left-3.5 bg-neutral-900"
                 : "left-0 border-2 border-neutral-300 bg-neutral-50"
             }`}
@@ -887,11 +1018,162 @@ function SkillCard({
           <div>
             <label className="mb-2 block text-sm font-medium text-neutral-600">关键词</label>
             <input
-              value={keywords}
+              value={skill.keywords}
               onChange={(event) => onKeywordsChange(event.target.value)}
               className="input-underline w-full py-2 text-neutral-900"
             />
           </div>
+
+          {browserSkill && (
+            <div className="mt-6 space-y-5">
+              <div className="space-y-3">
+                <button
+                  onClick={() => setSubSkillsExpanded((value) => !value)}
+                  className="flex w-full items-center justify-between rounded-sm bg-neutral-100/70 px-3 py-2 text-left"
+                >
+                  <div>
+                    <div className="text-sm font-medium text-neutral-700">子技能</div>
+                    <div className="mt-0.5 text-xs text-neutral-400">默认折叠显示，展开后每行两个</div>
+                  </div>
+                  {subSkillsExpanded ? (
+                    <ChevronDown className="h-4 w-4 flex-shrink-0 text-neutral-400" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-neutral-400" />
+                  )}
+                </button>
+
+                {subSkillsExpanded && (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {skill.sub_commands.map((command) => (
+                      <div key={command.id} className="rounded-sm bg-neutral-100/70 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm text-neutral-900">{command.name}</div>
+                            <div className="mt-0.5 text-xs text-neutral-400">{command.id}</div>
+                          </div>
+                          <button
+                            onClick={() => onSubCommandChange(command.id, { enabled: !command.enabled })}
+                            className="relative h-4 w-7 flex-shrink-0"
+                          >
+                            <div className="absolute left-0.5 right-0.5 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-200" />
+                            <div
+                              className={`absolute left-0.5 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-900 transition-all duration-200 ease-out ${
+                                command.enabled ? "w-6" : "w-0"
+                              }`}
+                            />
+                            <div
+                              className={`absolute top-0 h-4 w-4 transition-all duration-200 ease-out ${
+                                command.enabled
+                                  ? "left-3.5 bg-neutral-900"
+                                  : "left-0 border-2 border-neutral-300 bg-neutral-50"
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <div className="mt-3">
+                          <label className="mb-1 block text-xs text-neutral-400">关键词</label>
+                          <input
+                            value={command.keywords}
+                            onChange={(event) => onSubCommandChange(command.id, { keywords: event.target.value })}
+                            className="input-underline w-full py-2 text-sm text-neutral-900"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-neutral-700">网址解析</div>
+                <ToggleRow
+                  title="未命中时使用 LLM 解析"
+                  desc="借助已配置的大模型把站点名称转成公开网址"
+                  active={browserOptions.llm_site_resolution_enabled}
+                  onToggle={() =>
+                    onBrowserOptionChange({
+                      llm_site_resolution_enabled: !browserOptions.llm_site_resolution_enabled,
+                    })
+                  }
+                />
+                <ToggleRow
+                  title="解析失败时改为搜索"
+                  desc="当网址无法精确解析时，用搜索引擎打开原始关键词"
+                  active={browserOptions.search_fallback_enabled}
+                  onToggle={() =>
+                    onBrowserOptionChange({
+                      search_fallback_enabled: !browserOptions.search_fallback_enabled,
+                    })
+                  }
+                />
+                <Field
+                  label="搜索 URL 模板"
+                  value={browserOptions.search_url_template}
+                  onChange={(value) => onBrowserOptionChange({ search_url_template: value })}
+                />
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-neutral-700">站点映射</div>
+                  <ActionButton onClick={onAddBrowserSite}>新增站点</ActionButton>
+                </div>
+                {browserOptions.sites.length === 0 ? (
+                  <div className="text-xs text-neutral-400">还没有站点映射，未命中时会优先走 LLM 或搜索兜底。</div>
+                ) : (
+                  browserOptions.sites.map((site) => (
+                    <div key={site.id} className="space-y-3 rounded-sm bg-neutral-100/70 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs text-neutral-400">{site.id}</div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => onBrowserSiteChange(site.id, { enabled: !site.enabled })}
+                            className="relative h-4 w-7 flex-shrink-0"
+                          >
+                            <div className="absolute left-0.5 right-0.5 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-200" />
+                            <div
+                              className={`absolute left-0.5 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-900 transition-all duration-200 ease-out ${
+                                site.enabled ? "w-6" : "w-0"
+                              }`}
+                            />
+                            <div
+                              className={`absolute top-0 h-4 w-4 transition-all duration-200 ease-out ${
+                                site.enabled
+                                  ? "left-3.5 bg-neutral-900"
+                                  : "left-0 border-2 border-neutral-300 bg-neutral-50"
+                              }`}
+                            />
+                          </button>
+                          <MiniButton
+                            onClick={() => onRemoveBrowserSite(site.id)}
+                            icon={<Trash2 className="h-4 w-4" />}
+                            title="删除站点"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <Field
+                          label="名称"
+                          value={site.name}
+                          onChange={(value) => onBrowserSiteChange(site.id, { name: value })}
+                        />
+                        <Field
+                          label="别名"
+                          value={site.aliases}
+                          onChange={(value) => onBrowserSiteChange(site.id, { aliases: value })}
+                        />
+                      </div>
+                      <Field
+                        label="URL"
+                        value={site.url}
+                        onChange={(value) => onBrowserSiteChange(site.id, { url: value })}
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

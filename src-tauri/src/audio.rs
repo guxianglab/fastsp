@@ -112,10 +112,10 @@ impl AudioService {
                         println!("[AUDIO] skip device (no config): {}", name);
                         continue;
                     }
-                    
+
                     let count = name_counts.entry(name.clone()).or_insert(0);
                     *count += 1;
-                    
+
                     let id = if *count == 1 {
                         name.clone()
                     } else {
@@ -152,9 +152,10 @@ impl AudioService {
         // 2. 找设备
         let host = cpal::default_host();
         let mut resolved_id = device_id.to_string();
-        
+
         let device = if device_id.is_empty() {
-            let def = host.default_input_device()
+            let def = host
+                .default_input_device()
                 .ok_or(anyhow::anyhow!("No default input device found"))?;
             resolved_id = def.name().unwrap_or_default();
             def
@@ -243,9 +244,7 @@ impl AudioService {
     // ─────── 录音 ───────
 
     /// 开始录音 + 流式传输 — 返回 Receiver 接收实时音频块
-    pub fn start_recording_with_streaming(
-        &self,
-    ) -> Result<std::sync::mpsc::Receiver<Vec<f32>>> {
+    pub fn start_recording_with_streaming(&self) -> Result<std::sync::mpsc::Receiver<Vec<f32>>> {
         self.ensure_stream()?;
         self.state.buffer.lock().unwrap().clear();
 
@@ -350,8 +349,7 @@ fn build_input_stream<R: tauri::Runtime>(
                         return;
                     }
                     // 归一化 i16 -> f32 [-1.0, 1.0]
-                    let float_data: Vec<f32> =
-                        data.iter().map(|&s| s as f32 / 32768.0).collect();
+                    let float_data: Vec<f32> = data.iter().map(|&s| s as f32 / 32768.0).collect();
                     let mono = to_mono(&float_data, channels);
                     process_audio_data(&state, &app_handle, mono);
                 },
