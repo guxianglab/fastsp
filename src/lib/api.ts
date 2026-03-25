@@ -59,6 +59,7 @@ export interface SkillConfig {
     enabled: boolean;
     sub_commands: SkillSubCommandConfig[];
     browser_options?: BrowserSkillOptions | null;
+    windows_options?: WindowsSkillOptions | null;
 }
 
 export interface SkillSubCommandConfig {
@@ -81,6 +82,21 @@ export interface BrowserSkillOptions {
     search_fallback_enabled: boolean;
     search_url_template: string;
     sites: BrowserSiteConfig[];
+}
+
+export interface WindowsTargetConfig {
+    id: string;
+    name: string;
+    aliases: string;
+    launch_kind: "command" | "shell";
+    launch_target: string;
+    launch_args: string[];
+    enabled: boolean;
+}
+
+export interface WindowsSkillOptions {
+    llm_target_resolution_enabled: boolean;
+    targets: WindowsTargetConfig[];
 }
 
 export interface AppConfig {

@@ -978,6 +978,7 @@ function SkillCard({
   const [subSkillsExpanded, setSubSkillsExpanded] = useState(false);
   const browserOptions = ensureBrowserOptions(skill);
   const browserSkill = isBrowserSkill(skill);
+  const hasSubCommands = skill.sub_commands.length > 0;
 
   return (
     <div className="border-b border-neutral-200">
@@ -1024,7 +1025,7 @@ function SkillCard({
             />
           </div>
 
-          {browserSkill && (
+          {hasSubCommands && (
             <div className="mt-6 space-y-5">
               <div className="space-y-3">
                 <button
@@ -1084,7 +1085,8 @@ function SkillCard({
                 )}
               </div>
 
-              <div className="space-y-3">
+              {browserSkill && (
+                <div className="space-y-3">
                 <div className="text-sm font-medium text-neutral-700">网址解析</div>
                 <ToggleRow
                   title="未命中时使用 LLM 解析"
@@ -1111,9 +1113,11 @@ function SkillCard({
                   value={browserOptions.search_url_template}
                   onChange={(value) => onBrowserOptionChange({ search_url_template: value })}
                 />
-              </div>
+                </div>
+              )}
 
-              <div className="space-y-3">
+              {browserSkill && (
+                <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium text-neutral-700">站点映射</div>
                   <ActionButton onClick={onAddBrowserSite}>新增站点</ActionButton>
@@ -1171,7 +1175,8 @@ function SkillCard({
                     </div>
                   ))
                 )}
-              </div>
+                </div>
+              )}
             </div>
           )}
         </div>

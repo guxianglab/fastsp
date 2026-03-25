@@ -12,6 +12,7 @@ pub const ENABLE_POLISH_SKILL_ID: &str = "enable_polish";
 pub const DISABLE_POLISH_SKILL_ID: &str = "disable_polish";
 pub const SWITCH_POLISH_SCENE_SKILL_ID: &str = "switch_polish_scene";
 pub const OPEN_BROWSER_SKILL_ID: &str = "open_browser";
+pub const OPEN_WINDOWS_SKILL_ID: &str = "open_windows";
 pub const BROWSER_OPEN_TARGET_SUB_COMMAND_ID: &str = "open_target";
 pub const BROWSER_NEW_TAB_SUB_COMMAND_ID: &str = "new_tab";
 pub const BROWSER_CLOSE_TAB_SUB_COMMAND_ID: &str = "close_tab";
@@ -42,6 +43,13 @@ pub const BROWSER_OPEN_DEVTOOLS_SUB_COMMAND_ID: &str = "open_devtools";
 pub const BROWSER_MINIMIZE_WINDOW_SUB_COMMAND_ID: &str = "minimize_window";
 pub const BROWSER_MAXIMIZE_WINDOW_SUB_COMMAND_ID: &str = "maximize_window";
 pub const BROWSER_NEW_PRIVATE_WINDOW_SUB_COMMAND_ID: &str = "new_private_window";
+pub const WINDOWS_OPEN_TARGET_SUB_COMMAND_ID: &str = "open_target";
+pub const WINDOWS_SHOW_DESKTOP_SUB_COMMAND_ID: &str = "show_desktop";
+pub const WINDOWS_LOCK_SCREEN_SUB_COMMAND_ID: &str = "lock_screen";
+pub const WINDOWS_OPEN_RUN_DIALOG_SUB_COMMAND_ID: &str = "open_run_dialog";
+pub const WINDOWS_OPEN_CLIPBOARD_HISTORY_SUB_COMMAND_ID: &str = "open_clipboard_history";
+pub const WINDOWS_OPEN_QUICK_SETTINGS_SUB_COMMAND_ID: &str = "open_quick_settings";
+pub const WINDOWS_OPEN_NOTIFICATIONS_SUB_COMMAND_ID: &str = "open_notifications";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SkillSubCommandConfig {
@@ -95,6 +103,74 @@ pub struct BrowserSkillOptions {
     pub sites: Vec<BrowserSiteConfig>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WindowsLaunchKind {
+    Command,
+    Shell,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct WindowsTargetConfig {
+    pub id: String,
+    pub name: String,
+    pub aliases: String,
+    pub launch_kind: WindowsLaunchKind,
+    pub launch_target: String,
+    #[serde(default)]
+    pub launch_args: Vec<String>,
+    pub enabled: bool,
+}
+
+impl WindowsTargetConfig {
+    fn command(
+        id: &str,
+        name: &str,
+        aliases: &str,
+        launch_target: &str,
+        launch_args: &[&str],
+    ) -> Self {
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+            aliases: aliases.to_string(),
+            launch_kind: WindowsLaunchKind::Command,
+            launch_target: launch_target.to_string(),
+            launch_args: launch_args.iter().map(|value| value.to_string()).collect(),
+            enabled: true,
+        }
+    }
+
+    fn shell(id: &str, name: &str, aliases: &str, launch_target: &str) -> Self {
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+            aliases: aliases.to_string(),
+            launch_kind: WindowsLaunchKind::Shell,
+            launch_target: launch_target.to_string(),
+            launch_args: Vec::new(),
+            enabled: true,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct WindowsSkillOptions {
+    #[serde(default = "default_true")]
+    pub llm_target_resolution_enabled: bool,
+    #[serde(default = "default_windows_targets")]
+    pub targets: Vec<WindowsTargetConfig>,
+}
+
+impl Default for WindowsSkillOptions {
+    fn default() -> Self {
+        Self {
+            llm_target_resolution_enabled: true,
+            targets: default_windows_targets(),
+        }
+    }
+}
+
 impl Default for BrowserSkillOptions {
     fn default() -> Self {
         Self {
@@ -116,6 +192,8 @@ pub struct SkillConfig {
     pub sub_commands: Vec<SkillSubCommandConfig>,
     #[serde(default)]
     pub browser_options: Option<BrowserSkillOptions>,
+    #[serde(default)]
+    pub windows_options: Option<WindowsSkillOptions>,
 }
 
 impl SkillConfig {
@@ -127,6 +205,7 @@ impl SkillConfig {
             enabled: true,
             sub_commands: Vec::new(),
             browser_options: None,
+            windows_options: None,
         }
     }
 }
@@ -153,6 +232,7 @@ pub enum BuiltinSkillId {
     ComposeEmail,
     OpenCalculator,
     OpenBrowser,
+    OpenWindows,
     OpenNotepad,
     OpenExplorer,
     Screenshot,
@@ -220,6 +300,32 @@ pub enum BrowserPlanResult {
     None,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WindowsAction {
+    OpenTarget { query: String },
+    ShowDesktop,
+    LockScreen,
+    OpenRunDialog,
+    OpenClipboardHistory,
+    OpenQuickSettings,
+    OpenNotifications,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WindowsActionPlan {
+    pub action: WindowsAction,
+    pub action_name: String,
+    pub note: Option<String>,
+    pub consumed_end: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WindowsPlanResult {
+    Action(WindowsActionPlan),
+    Feedback(String),
+    None,
+}
+
 fn default_true() -> bool {
     true
 }
@@ -242,6 +348,138 @@ fn default_browser_sites() -> Vec<BrowserSiteConfig> {
             "Gmail",
             "gmail,谷歌邮箱",
             "https://mail.google.com",
+        ),
+    ]
+}
+
+fn default_windows_targets() -> Vec<WindowsTargetConfig> {
+    vec![
+        WindowsTargetConfig::shell(
+            "settings",
+            "Windows Settings",
+            "settings,windows settings,system settings,设置,系统设置",
+            "ms-settings:",
+        ),
+        WindowsTargetConfig::shell(
+            "display_settings",
+            "Display Settings",
+            "display settings,screen settings,显示设置,屏幕设置",
+            "ms-settings:display",
+        ),
+        WindowsTargetConfig::shell(
+            "sound_settings",
+            "Sound Settings",
+            "sound settings,audio settings,声音设置,音频设置",
+            "ms-settings:sound",
+        ),
+        WindowsTargetConfig::shell(
+            "wifi_settings",
+            "Wi-Fi Settings",
+            "wifi,wifi settings,wireless network,无线网络,wifi设置",
+            "ms-settings:network-wifi",
+        ),
+        WindowsTargetConfig::shell(
+            "bluetooth_settings",
+            "Bluetooth Settings",
+            "bluetooth,bluetooth settings,蓝牙,蓝牙设置",
+            "ms-settings:bluetooth",
+        ),
+        WindowsTargetConfig::shell(
+            "windows_update",
+            "Windows Update",
+            "windows update,update settings,更新,更新设置",
+            "ms-settings:windowsupdate",
+        ),
+        WindowsTargetConfig::shell(
+            "apps_settings",
+            "Apps Settings",
+            "apps installed,installed apps,应用,应用和功能,已安装应用",
+            "ms-settings:appsfeatures",
+        ),
+        WindowsTargetConfig::command(
+            "task_manager",
+            "Task Manager",
+            "task manager,任务管理器",
+            "taskmgr",
+            &[],
+        ),
+        WindowsTargetConfig::command(
+            "control_panel",
+            "Control Panel",
+            "control panel,控制面板",
+            "control",
+            &[],
+        ),
+        WindowsTargetConfig::shell(
+            "device_manager",
+            "Device Manager",
+            "device manager,设备管理器",
+            "devmgmt.msc",
+        ),
+        WindowsTargetConfig::shell(
+            "disk_management",
+            "Disk Management",
+            "disk management,磁盘管理",
+            "diskmgmt.msc",
+        ),
+        WindowsTargetConfig::shell(
+            "services",
+            "Services",
+            "services,windows services,服务,系统服务",
+            "services.msc",
+        ),
+        WindowsTargetConfig::shell(
+            "event_viewer",
+            "Event Viewer",
+            "event viewer,日志查看器,事件查看器",
+            "eventvwr.msc",
+        ),
+        WindowsTargetConfig::command(
+            "terminal",
+            "Windows Terminal",
+            "terminal,windows terminal,终端",
+            "wt",
+            &[],
+        ),
+        WindowsTargetConfig::command(
+            "command_prompt",
+            "Command Prompt",
+            "cmd,command prompt,dos,命令提示符",
+            "cmd",
+            &[],
+        ),
+        WindowsTargetConfig::command(
+            "powershell",
+            "PowerShell",
+            "powershell,power shell",
+            "powershell",
+            &[],
+        ),
+        WindowsTargetConfig::command(
+            "explorer",
+            "File Explorer",
+            "explorer,file explorer,资源管理器,文件管理器",
+            "explorer",
+            &[],
+        ),
+        WindowsTargetConfig::shell(
+            "downloads",
+            "Downloads",
+            "downloads,download folder,下载,下载文件夹",
+            "shell:Downloads",
+        ),
+        WindowsTargetConfig::shell(
+            "documents",
+            "Documents",
+            "documents,document folder,文档,我的文档",
+            "shell:Personal",
+        ),
+        WindowsTargetConfig::shell("desktop", "Desktop", "desktop,桌面", "shell:Desktop"),
+        WindowsTargetConfig::shell(
+            "pictures",
+            "Pictures",
+            "pictures,photos,图片,照片",
+            "shell:My Pictures",
         ),
     ]
 }
@@ -381,12 +619,53 @@ fn default_browser_sub_commands() -> Vec<SkillSubCommandConfig> {
     ]
 }
 
+fn default_windows_sub_commands() -> Vec<SkillSubCommandConfig> {
+    vec![
+        SkillSubCommandConfig::new(
+            WINDOWS_OPEN_TARGET_SUB_COMMAND_ID,
+            "Open Windows Target",
+            "open,launch,start,run,打开,启动,运行,进入",
+        ),
+        SkillSubCommandConfig::new(
+            WINDOWS_SHOW_DESKTOP_SUB_COMMAND_ID,
+            "Show Desktop",
+            "show desktop,desktop,显示桌面,回到桌面",
+        ),
+        SkillSubCommandConfig::new(
+            WINDOWS_LOCK_SCREEN_SUB_COMMAND_ID,
+            "Lock Screen",
+            "lock screen,lock windows,锁屏,锁定电脑",
+        ),
+        SkillSubCommandConfig::new(
+            WINDOWS_OPEN_RUN_DIALOG_SUB_COMMAND_ID,
+            "Open Run Dialog",
+            "run dialog,open run,运行,打开运行",
+        ),
+        SkillSubCommandConfig::new(
+            WINDOWS_OPEN_CLIPBOARD_HISTORY_SUB_COMMAND_ID,
+            "Open Clipboard History",
+            "clipboard history,clip history,剪贴板历史,打开剪贴板",
+        ),
+        SkillSubCommandConfig::new(
+            WINDOWS_OPEN_QUICK_SETTINGS_SUB_COMMAND_ID,
+            "Open Quick Settings",
+            "quick settings,action center controls,快速设置",
+        ),
+        SkillSubCommandConfig::new(
+            WINDOWS_OPEN_NOTIFICATIONS_SUB_COMMAND_ID,
+            "Open Notifications",
+            "notifications,notification center,打开通知,通知中心",
+        ),
+    ]
+}
+
 impl BuiltinSkillId {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "compose_email" => Some(Self::ComposeEmail),
             "open_calculator" => Some(Self::OpenCalculator),
             OPEN_BROWSER_SKILL_ID => Some(Self::OpenBrowser),
+            OPEN_WINDOWS_SKILL_ID => Some(Self::OpenWindows),
             "open_notepad" => Some(Self::OpenNotepad),
             "open_explorer" => Some(Self::OpenExplorer),
             "screenshot" => Some(Self::Screenshot),
@@ -416,11 +695,19 @@ pub fn get_default_skills() -> Vec<SkillConfig> {
         SkillConfig::new(OPEN_BROWSER_SKILL_ID, "浏览器", "打开浏览器,上网,浏览器");
     browser_skill.sub_commands = default_browser_sub_commands();
     browser_skill.browser_options = Some(BrowserSkillOptions::default());
+    let mut windows_skill = SkillConfig::new(
+        OPEN_WINDOWS_SKILL_ID,
+        "Windows",
+        "windows,system,desktop,电脑,系统,桌面",
+    );
+    windows_skill.sub_commands = default_windows_sub_commands();
+    windows_skill.windows_options = Some(WindowsSkillOptions::default());
 
     vec![
         SkillConfig::new("compose_email", "写邮件", "写邮件,发邮件,新邮件,发送邮件"),
         SkillConfig::new("open_calculator", "计算器", "计算器,打开计算器"),
         browser_skill,
+        windows_skill,
         SkillConfig::new("open_notepad", "记事本", "记事本,打开记事本"),
         SkillConfig::new(
             "open_explorer",
@@ -490,6 +777,17 @@ fn merge_skill_defaults(skill: &mut SkillConfig, default_skill: &SkillConfig) ->
         _ => {}
     }
 
+    match (&mut skill.windows_options, &default_skill.windows_options) {
+        (None, Some(default_options)) => {
+            skill.windows_options = Some(default_options.clone());
+            changed = true;
+        }
+        (Some(options), Some(default_options)) => {
+            changed |= merge_windows_targets(&mut options.targets, &default_options.targets);
+        }
+        _ => {}
+    }
+
     changed
 }
 
@@ -520,6 +818,23 @@ fn merge_browser_sites(
     for default_site in defaults {
         if !existing_ids.contains(&default_site.id) {
             existing.push(default_site.clone());
+            changed = true;
+        }
+    }
+
+    changed
+}
+
+fn merge_windows_targets(
+    existing: &mut Vec<WindowsTargetConfig>,
+    defaults: &[WindowsTargetConfig],
+) -> bool {
+    let existing_ids: HashSet<String> = existing.iter().map(|target| target.id.clone()).collect();
+    let mut changed = false;
+
+    for default_target in defaults {
+        if !existing_ids.contains(&default_target.id) {
+            existing.push(default_target.clone());
             changed = true;
         }
     }
@@ -943,6 +1258,165 @@ pub fn resolve_browser_site_url(browser_skill: &SkillConfig, query: &str) -> Opt
     None
 }
 
+pub fn plan_windows_action(
+    transcript: &str,
+    windows_skill: &SkillConfig,
+    windows_match: Option<&SkillMatch>,
+) -> WindowsPlanResult {
+    if !windows_skill.enabled {
+        return WindowsPlanResult::None;
+    }
+
+    let mut sub_matches = match_sub_commands(transcript, &windows_skill.sub_commands);
+    if let Some(windows_match) = windows_match {
+        sub_matches.retain(|command_match| command_match.start >= windows_match.end);
+    }
+
+    let selected_match = sub_matches
+        .iter()
+        .find(|command_match| command_match.sub_command_id != WINDOWS_OPEN_TARGET_SUB_COMMAND_ID)
+        .or_else(|| sub_matches.first());
+
+    if let Some(first_match) = selected_match {
+        let next_start = sub_matches
+            .iter()
+            .filter(|next_match| next_match.start > first_match.start)
+            .map(|next_match| next_match.start)
+            .next();
+        let consumed_end = next_start.unwrap_or(transcript.len());
+        let note = if sub_matches.len() > 1 {
+            Some(format!(
+                "Detected multiple Windows actions. Executing the first one: {}",
+                first_match.name
+            ))
+        } else {
+            None
+        };
+
+        return match first_match.sub_command_id.as_str() {
+            WINDOWS_OPEN_TARGET_SUB_COMMAND_ID => {
+                let query = extract_freeform_query(transcript, first_match.end, next_start);
+                if query.is_empty() {
+                    WindowsPlanResult::Feedback(
+                        "No Windows target was recognized to open".to_string(),
+                    )
+                } else {
+                    WindowsPlanResult::Action(WindowsActionPlan {
+                        action: WindowsAction::OpenTarget { query },
+                        action_name: first_match.name.clone(),
+                        note,
+                        consumed_end,
+                    })
+                }
+            }
+            WINDOWS_SHOW_DESKTOP_SUB_COMMAND_ID => WindowsPlanResult::Action(WindowsActionPlan {
+                action: WindowsAction::ShowDesktop,
+                action_name: first_match.name.clone(),
+                note,
+                consumed_end,
+            }),
+            WINDOWS_LOCK_SCREEN_SUB_COMMAND_ID => WindowsPlanResult::Action(WindowsActionPlan {
+                action: WindowsAction::LockScreen,
+                action_name: first_match.name.clone(),
+                note,
+                consumed_end,
+            }),
+            WINDOWS_OPEN_RUN_DIALOG_SUB_COMMAND_ID => {
+                WindowsPlanResult::Action(WindowsActionPlan {
+                    action: WindowsAction::OpenRunDialog,
+                    action_name: first_match.name.clone(),
+                    note,
+                    consumed_end,
+                })
+            }
+            WINDOWS_OPEN_CLIPBOARD_HISTORY_SUB_COMMAND_ID => {
+                WindowsPlanResult::Action(WindowsActionPlan {
+                    action: WindowsAction::OpenClipboardHistory,
+                    action_name: first_match.name.clone(),
+                    note,
+                    consumed_end,
+                })
+            }
+            WINDOWS_OPEN_QUICK_SETTINGS_SUB_COMMAND_ID => {
+                WindowsPlanResult::Action(WindowsActionPlan {
+                    action: WindowsAction::OpenQuickSettings,
+                    action_name: first_match.name.clone(),
+                    note,
+                    consumed_end,
+                })
+            }
+            WINDOWS_OPEN_NOTIFICATIONS_SUB_COMMAND_ID => {
+                WindowsPlanResult::Action(WindowsActionPlan {
+                    action: WindowsAction::OpenNotifications,
+                    action_name: first_match.name.clone(),
+                    note,
+                    consumed_end,
+                })
+            }
+            _ => WindowsPlanResult::None,
+        };
+    }
+
+    if let Some(windows_match) = windows_match {
+        let query = extract_freeform_query(transcript, windows_match.end, None);
+        if query.is_empty() {
+            return WindowsPlanResult::Feedback(
+                "No Windows target was recognized to open".to_string(),
+            );
+        }
+
+        return WindowsPlanResult::Action(WindowsActionPlan {
+            action: WindowsAction::OpenTarget { query },
+            action_name: "Open Windows Target".to_string(),
+            note: None,
+            consumed_end: transcript.len(),
+        });
+    }
+
+    WindowsPlanResult::None
+}
+
+pub fn resolve_windows_target(
+    windows_skill: &SkillConfig,
+    query: &str,
+) -> Option<WindowsTargetConfig> {
+    let options = windows_skill.windows_options.as_ref()?;
+    let normalized_query = normalize_browser_target_token(query);
+    if normalized_query.is_empty() {
+        return None;
+    }
+
+    options
+        .targets
+        .iter()
+        .filter(|target| target.enabled)
+        .find(|target| {
+            std::iter::once(target.name.as_str())
+                .chain(
+                    target
+                        .aliases
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|alias| !alias.is_empty()),
+                )
+                .map(normalize_browser_target_token)
+                .any(|candidate| !candidate.is_empty() && candidate == normalized_query)
+        })
+        .cloned()
+}
+
+pub fn resolve_windows_target_by_id(
+    windows_skill: &SkillConfig,
+    target_id: &str,
+) -> Option<WindowsTargetConfig> {
+    let options = windows_skill.windows_options.as_ref()?;
+    options
+        .targets
+        .iter()
+        .find(|target| target.enabled && target.id == target_id)
+        .cloned()
+}
+
 pub fn normalize_browser_url(raw: &str) -> Result<String, String> {
     let candidate = raw.trim();
     if candidate.is_empty() {
@@ -1002,6 +1476,9 @@ pub fn execute_skill(skill_id: &str) -> Result<(), String> {
         Some(BuiltinSkillId::OpenBrowser) => {
             Err("Browser skill requires sub-command planning before execution".to_string())
         }
+        Some(BuiltinSkillId::OpenWindows) => {
+            Err("Windows skill requires sub-command planning before execution".to_string())
+        }
         Some(BuiltinSkillId::OpenNotepad) => {
             println!("[SKILL] Executing: open_notepad");
             Command::new("notepad")
@@ -1044,6 +1521,30 @@ pub fn open_browser_url(url: &str) -> Result<(), String> {
         .args(["/C", "start", "", normalized.as_str()])
         .spawn()
         .map_err(|e| format!("Failed to open browser URL: {}", e))?;
+    Ok(())
+}
+
+pub fn open_windows_target(target: &WindowsTargetConfig) -> Result<(), String> {
+    println!(
+        "[SKILL] Opening Windows target '{}' via {:?}: {}",
+        target.id, target.launch_kind, target.launch_target
+    );
+
+    match target.launch_kind {
+        WindowsLaunchKind::Command => Command::new(&target.launch_target)
+            .args(&target.launch_args)
+            .spawn()
+            .map_err(|e| format!("Failed to open Windows target '{}': {}", target.name, e))?,
+        WindowsLaunchKind::Shell => Command::new("cmd")
+            .arg("/C")
+            .arg("start")
+            .arg("")
+            .arg(&target.launch_target)
+            .args(&target.launch_args)
+            .spawn()
+            .map_err(|e| format!("Failed to open Windows target '{}': {}", target.name, e))?,
+    };
+
     Ok(())
 }
 
@@ -1105,6 +1606,42 @@ pub fn execute_browser_shortcut_action(action: &BrowserAction) -> Result<(), Str
         BrowserAction::MaximizeWindow => send_chord(&mut enigo, &[Key::Meta], Key::UpArrow),
         BrowserAction::NewPrivateWindow => {
             send_chord(&mut enigo, &[Key::Control, Key::Shift], Key::Unicode('n'))
+        }
+    }
+}
+
+pub fn execute_windows_shortcut_action(action: &WindowsAction) -> Result<(), String> {
+    match action {
+        WindowsAction::OpenTarget { .. } => {
+            Err("OpenTarget must be executed via Windows target resolution".to_string())
+        }
+        WindowsAction::LockScreen => Command::new("rundll32.exe")
+            .args(["user32.dll,LockWorkStation"])
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("Failed to lock screen: {}", e)),
+        other_action => {
+            let mut enigo = Enigo::new(&Settings::default())
+                .map_err(|e| format!("Failed to init keyboard: {:?}", e))?;
+
+            match other_action {
+                WindowsAction::ShowDesktop => {
+                    send_chord(&mut enigo, &[Key::Meta], Key::Unicode('d'))
+                }
+                WindowsAction::OpenRunDialog => {
+                    send_chord(&mut enigo, &[Key::Meta], Key::Unicode('r'))
+                }
+                WindowsAction::OpenClipboardHistory => {
+                    send_chord(&mut enigo, &[Key::Meta], Key::Unicode('v'))
+                }
+                WindowsAction::OpenQuickSettings => {
+                    send_chord(&mut enigo, &[Key::Meta], Key::Unicode('a'))
+                }
+                WindowsAction::OpenNotifications => {
+                    send_chord(&mut enigo, &[Key::Meta], Key::Unicode('n'))
+                }
+                WindowsAction::OpenTarget { .. } | WindowsAction::LockScreen => unreachable!(),
+            }
         }
     }
 }
@@ -1425,6 +1962,7 @@ mod tests {
             enabled: true,
             sub_commands: Vec::new(),
             browser_options: None,
+            windows_options: None,
         }
     }
 
@@ -1492,6 +2030,7 @@ mod tests {
             enabled: true,
             sub_commands: Vec::new(),
             browser_options: None,
+            windows_options: None,
         };
 
         let (merged, changed) = merge_with_default_skills(vec![legacy_browser]);
@@ -1608,6 +2147,36 @@ mod tests {
     fn parse_tab_index_supports_digits_and_chinese_numbers() {
         assert_eq!(parse_tab_index("3个页面"), Some(3));
         assert_eq!(parse_tab_index("第六个标签页"), Some(6));
+    }
+
+    #[test]
+    fn windows_plan_extracts_open_target() {
+        let windows = find_skill_config(&get_default_skills(), OPEN_WINDOWS_SKILL_ID)
+            .expect("windows skill")
+            .clone();
+
+        let plan = plan_windows_action("打开任务管理器", &windows, None);
+        match plan {
+            WindowsPlanResult::Action(plan) => {
+                assert_eq!(
+                    plan.action,
+                    WindowsAction::OpenTarget {
+                        query: "任务管理器".to_string()
+                    }
+                );
+            }
+            other => panic!("unexpected plan: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn resolve_windows_target_matches_alias() {
+        let windows = find_skill_config(&get_default_skills(), OPEN_WINDOWS_SKILL_ID)
+            .expect("windows skill")
+            .clone();
+
+        let target = resolve_windows_target(&windows, "任务管理器").expect("windows target");
+        assert_eq!(target.id, "task_manager");
     }
 
     #[test]

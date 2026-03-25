@@ -311,6 +311,8 @@ async fn execute_skill_transcript<R: Runtime>(
     let skills_config = config.skills.clone();
     let browser_skill =
         skills::find_skill_config(&skills_config, skills::OPEN_BROWSER_SKILL_ID).cloned();
+    let windows_skill =
+        skills::find_skill_config(&skills_config, skills::OPEN_WINDOWS_SKILL_ID).cloned();
 
     let matched_skills = skills::match_skills(&effective_text, &skills_config);
     let mut max_consumed_local_end = 0usize;
@@ -363,6 +365,111 @@ async fn execute_skill_transcript<R: Runtime>(
                             "[SKILL] #{} Config skill execution failed for {}: {}",
                             seq_id, skill_match.skill_id, e
                         );
+                    }
+                }
+                continue;
+            }
+
+            if skill_match.skill_id == skills::OPEN_WINDOWS_SKILL_ID {
+                match windows_skill.as_ref() {
+                    Some(windows_skill) => match plan_windows_command(
+                        &effective_text,
+                        windows_skill,
+                        Some(skill_match),
+                    ) {
+                        Ok(Some(plan)) => {
+                            if let skills::WindowsAction::OpenTarget { query } = &plan.action {
+                                if !is_windows_open_query_ready(windows_skill, query) {
+                                    continue;
+                                }
+                                let action_key = windows_action_key(&plan.action);
+                                if !is_final
+                                    && !confirm_streaming_browser_open_action(
+                                        skill_state,
+                                        skill_session_id,
+                                        &action_key,
+                                    )
+                                {
+                                    println!(
+                                        "[SKILL] #{} Deferred Windows open until transcript stabilizes: {}",
+                                        seq_id,
+                                        query.trim()
+                                    );
+                                    continue;
+                                }
+                            } else {
+                                clear_streaming_browser_open_action_candidate(
+                                    skill_state,
+                                    skill_session_id,
+                                );
+                            }
+
+                            let action_key = windows_action_key(&plan.action);
+                            if !reserve_skill_action(skill_state, skill_session_id, &action_key) {
+                                continue;
+                            }
+
+                            match execute_windows_plan(
+                                app_handle,
+                                windows_skill,
+                                &plan,
+                                &config,
+                                llm_cancel,
+                                seq_id,
+                            )
+                            .await
+                            {
+                                Ok(_) => {
+                                    complete_skill_action(
+                                        skill_state,
+                                        skill_session_id,
+                                        &action_key,
+                                        true,
+                                    );
+                                    max_consumed_local_end =
+                                        max_consumed_local_end.max(plan.consumed_end);
+                                    clear_streaming_browser_open_action_candidate(
+                                        skill_state,
+                                        skill_session_id,
+                                    );
+                                    println!(
+                                        "[SKILL] #{} Executed Windows command successfully",
+                                        seq_id
+                                    );
+                                }
+                                Err(e) => {
+                                    complete_skill_action(
+                                        skill_state,
+                                        skill_session_id,
+                                        &action_key,
+                                        true,
+                                    );
+                                    emit_voice_command_feedback(app_handle, "error", e.clone());
+                                    eprintln!(
+                                        "[SKILL] #{} Windows execution failed: {}",
+                                        seq_id, e
+                                    );
+                                }
+                            }
+                        }
+                        Ok(None) => {
+                            clear_streaming_browser_open_action_candidate(
+                                skill_state,
+                                skill_session_id,
+                            );
+                        }
+                        Err(e) => {
+                            clear_streaming_browser_open_action_candidate(
+                                skill_state,
+                                skill_session_id,
+                            );
+                            emit_voice_command_feedback(app_handle, "error", e.clone());
+                            eprintln!("[SKILL] #{} Windows plan failed: {}", seq_id, e);
+                        }
+                    },
+                    None => {
+                        emit_voice_command_feedback(app_handle, "error", "Windows skill missing");
+                        eprintln!("[SKILL] #{} Windows skill missing from config", seq_id);
                     }
                 }
                 continue;
@@ -507,6 +614,88 @@ async fn execute_skill_transcript<R: Runtime>(
             );
         }
         return;
+    }
+
+    if let Some(windows_skill) = windows_skill.as_ref() {
+        match plan_windows_command(&effective_text, windows_skill, None) {
+            Ok(Some(plan)) => {
+                if let skills::WindowsAction::OpenTarget { query } = &plan.action {
+                    if !is_windows_open_query_ready(windows_skill, query) {
+                        return;
+                    }
+                    let action_key = windows_action_key(&plan.action);
+                    if !is_final
+                        && !confirm_streaming_browser_open_action(
+                            skill_state,
+                            skill_session_id,
+                            &action_key,
+                        )
+                    {
+                        println!(
+                            "[SKILL] #{} Deferred Windows open until transcript stabilizes: {}",
+                            seq_id,
+                            query.trim()
+                        );
+                        return;
+                    }
+                } else {
+                    clear_streaming_browser_open_action_candidate(skill_state, skill_session_id);
+                }
+
+                let action_key = windows_action_key(&plan.action);
+                if !reserve_skill_action(skill_state, skill_session_id, &action_key) {
+                    return;
+                }
+
+                let is_open_target =
+                    matches!(&plan.action, skills::WindowsAction::OpenTarget { .. });
+                match execute_windows_plan(
+                    app_handle,
+                    windows_skill,
+                    &plan,
+                    &config,
+                    llm_cancel,
+                    seq_id,
+                )
+                .await
+                {
+                    Ok(_) => {
+                        complete_skill_action(skill_state, skill_session_id, &action_key, true);
+                        advance_skill_transcript_consumed(
+                            skill_state,
+                            skill_session_id,
+                            text,
+                            transcript_offset + plan.consumed_end,
+                        );
+                        clear_streaming_browser_open_action_candidate(
+                            skill_state,
+                            skill_session_id,
+                        );
+                        println!("[SKILL] #{} Executed Windows fallback successfully", seq_id);
+                        return;
+                    }
+                    Err(e) => {
+                        complete_skill_action(skill_state, skill_session_id, &action_key, true);
+                        if is_open_target {
+                            eprintln!(
+                                "[SKILL] #{} Windows fallback unresolved, trying browser fallback: {}",
+                                seq_id, e
+                            );
+                        } else {
+                            emit_voice_command_feedback(app_handle, "error", e.clone());
+                            eprintln!("[SKILL] #{} Windows fallback failed: {}", seq_id, e);
+                            return;
+                        }
+                    }
+                }
+            }
+            Ok(None) => {
+                clear_streaming_browser_open_action_candidate(skill_state, skill_session_id);
+            }
+            Err(_) => {
+                clear_streaming_browser_open_action_candidate(skill_state, skill_session_id);
+            }
+        }
     }
 
     if let Some(browser_skill) = browser_skill.as_ref() {
@@ -819,6 +1008,15 @@ fn browser_action_key(action: &skills::BrowserAction) -> String {
     }
 }
 
+fn windows_action_key(action: &skills::WindowsAction) -> String {
+    match action {
+        skills::WindowsAction::OpenTarget { query } => {
+            format!("windows:open_target:{}", query.trim().to_lowercase())
+        }
+        other => format!("windows:{:?}", other),
+    }
+}
+
 fn trim_skill_transcript_prefix(text: &str) -> (&str, usize) {
     let trimmed = text.trim_start_matches(|ch: char| {
         ch.is_whitespace() || matches!(ch, '，' | '。' | ',' | '.' | '、' | ';' | '；' | ':' | '：')
@@ -954,6 +1152,26 @@ fn is_browser_open_query_ready(browser_skill: &skills::SkillConfig, query: &str)
     visible_len >= 2
 }
 
+fn is_windows_open_query_ready(windows_skill: &skills::SkillConfig, query: &str) -> bool {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    if skills::resolve_windows_target(windows_skill, trimmed).is_some() {
+        return true;
+    }
+
+    let visible_len = trimmed.chars().filter(|ch| !ch.is_whitespace()).count();
+    let ascii_only = trimmed
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ".-_/".contains(ch));
+    if ascii_only {
+        return visible_len >= 3;
+    }
+
+    visible_len >= 2
+}
+
 fn set_browser_llm_state<R: Runtime>(app_handle: &AppHandle<R>, active: bool) {
     app_handle.emit("llm_processing", active).ok();
     let listener = app_handle.state::<InputListenerState>();
@@ -1042,6 +1260,76 @@ async fn resolve_browser_navigation_target<R: Runtime>(
     Err(llm_reason.unwrap_or_else(|| format!("未识别到可打开的网址：{}", query.trim())))
 }
 
+async fn resolve_windows_target<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    windows_skill: &skills::SkillConfig,
+    query: &str,
+    config: &AppConfig,
+    llm_cancel: &LlmCancelState,
+    seq_id: u64,
+) -> Result<(skills::WindowsTargetConfig, String), String> {
+    if let Some(target) = skills::resolve_windows_target(windows_skill, query) {
+        return Ok((target, format!("Opened Windows target: {}", query.trim())));
+    }
+
+    let options = windows_skill
+        .windows_options
+        .as_ref()
+        .ok_or_else(|| "Windows skill configuration is missing".to_string())?;
+
+    if !options.llm_target_resolution_enabled {
+        return Err(format!("No Windows target matched: {}", query.trim()));
+    }
+
+    let cancel_token = CancellationToken::new();
+    store_llm_cancel_token(llm_cancel, Some(cancel_token.clone()));
+    set_browser_llm_state(app_handle, true);
+
+    let resolution = tokio::select! {
+        result = llm::resolve_windows_target(query, windows_skill, &config.llm_config, &config.proxy) => Some(result),
+        _ = cancel_token.cancelled() => None,
+    };
+
+    set_browser_llm_state(app_handle, false);
+    store_llm_cancel_token(llm_cancel, None);
+
+    match resolution {
+        Some(Ok(outcome)) => {
+            if let Some(target_id) = outcome.resolved_target_id {
+                if let Some(target) =
+                    skills::resolve_windows_target_by_id(windows_skill, &target_id)
+                {
+                    println!(
+                        "[SKILL] #{} Windows target resolved via LLM: {}",
+                        seq_id, target_id
+                    );
+                    return Ok((
+                        target,
+                        format!("Resolved and opened Windows target: {}", query.trim()),
+                    ));
+                }
+            }
+            Err(outcome
+                .fallback_reason
+                .unwrap_or_else(|| format!("No Windows target matched: {}", query.trim())))
+        }
+        Some(Err(error)) => Err(error.to_string()),
+        None => Err("Windows target resolution was cancelled".to_string()),
+    }
+}
+
+fn plan_windows_command(
+    transcript: &str,
+    windows_skill: &skills::SkillConfig,
+    windows_match: Option<&skills::SkillMatch>,
+) -> Result<Option<skills::WindowsActionPlan>, String> {
+    match skills::plan_windows_action(transcript, windows_skill, windows_match) {
+        skills::WindowsPlanResult::None => Ok(None),
+        skills::WindowsPlanResult::Feedback(message) => Err(message),
+        skills::WindowsPlanResult::Action(plan) => Ok(Some(plan)),
+    }
+}
+
 fn plan_browser_command(
     transcript: &str,
     browser_skill: &skills::SkillConfig,
@@ -1121,6 +1409,54 @@ async fn execute_browser_plan<R: Runtime>(
                 skills::BrowserAction::OpenTarget { .. }
                 | skills::BrowserAction::Find { .. }
                 | skills::BrowserAction::SwitchTabIndex { .. } => unreachable!(),
+            }
+        }
+    };
+
+    emit_voice_command_feedback(app_handle, "success", success_message);
+    if let Some(note) = note {
+        emit_voice_command_feedback(app_handle, "info", note);
+    }
+    Ok(())
+}
+
+async fn execute_windows_plan<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    windows_skill: &skills::SkillConfig,
+    plan: &skills::WindowsActionPlan,
+    config: &AppConfig,
+    llm_cancel: &LlmCancelState,
+    seq_id: u64,
+) -> Result<(), String> {
+    let note = plan.note.clone();
+    let success_message = match &plan.action {
+        skills::WindowsAction::OpenTarget { query } => {
+            let (target, message) = resolve_windows_target(
+                app_handle,
+                windows_skill,
+                query,
+                config,
+                llm_cancel,
+                seq_id,
+            )
+            .await?;
+            skills::open_windows_target(&target)?;
+            message
+        }
+        other_action => {
+            skills::execute_windows_shortcut_action(other_action)?;
+            match other_action {
+                skills::WindowsAction::ShowDesktop => "Showed the desktop".to_string(),
+                skills::WindowsAction::LockScreen => "Locked the screen".to_string(),
+                skills::WindowsAction::OpenRunDialog => "Opened the Run dialog".to_string(),
+                skills::WindowsAction::OpenClipboardHistory => {
+                    "Opened clipboard history".to_string()
+                }
+                skills::WindowsAction::OpenQuickSettings => "Opened quick settings".to_string(),
+                skills::WindowsAction::OpenNotifications => {
+                    "Opened notification center".to_string()
+                }
+                skills::WindowsAction::OpenTarget { .. } => unreachable!(),
             }
         }
     };
