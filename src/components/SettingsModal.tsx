@@ -1,5 +1,5 @@
 ﻿import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Copy, Loader2, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronRight, Copy, Loader2, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { api, AppConfig, AudioDevice, LlmConfig, PromptProfile, ProxyConfig, SkillConfig, events } from "../lib/api";
 
 interface SettingsModalProps {
@@ -8,11 +8,11 @@ interface SettingsModalProps {
   isFirstSetup?: boolean;
 }
 
-type SettingsTab = "audio" | "recognition" | "polish" | "skills";
+type SettingsTab = "audio" | "models" | "polish" | "skills";
 
 const TABS: Array<{ key: SettingsTab; label: string }> = [
   { key: "audio", label: "录音" },
-  { key: "recognition", label: "识别" },
+  { key: "models", label: "模型" },
   { key: "polish", label: "润色" },
   { key: "skills", label: "技能" },
 ];
@@ -325,7 +325,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
   };
 
   const close = async () => {
-    const ready = !!config.input_device && !!config.online_asr_config.app_key && !!config.online_asr_config.access_key;
+    const ready = !!config.input_device && !!config.online_asr_config.app_key && !!config.online_asr_config.access_key && !!config.llm_config.base_url && !!config.llm_config.api_key;
     if (isFirstSetup && !ready) {
       setShowWarning(true);
       return;
@@ -346,7 +346,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
           <div>
             <h2 className="text-xl font-semibold text-neutral-900">{isFirstSetup ? "完成设置" : "设置"}</h2>
             <div className="mt-1 text-sm text-neutral-500">
-              {isFirstSetup ? "先配置麦克风和识别服务" : saveText}
+              {isFirstSetup ? "先配置麦克风和模型服务" : saveText}
             </div>
           </div>
           <button
@@ -436,26 +436,33 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
               </div>
             )}
 
-            {activeTab === "recognition" && (
+            {activeTab === "models" && (
               <div className="space-y-5">
-                <Section title="在线识别">
+                <Section title="流式语音识别">
+                  <div className="mb-4 rounded-md bg-neutral-100 px-4 py-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="font-medium text-neutral-700">豆包</span>
+                      <span className="text-neutral-400">·</span>
+                      <span className="text-neutral-500">火山引擎流式语音识别服务</span>
+                    </div>
+                  </div>
                   <div className="grid gap-3 md:grid-cols-2">
                     <Field
-                      label="应用密钥"
+                      label="app_key"
                       value={config.online_asr_config.app_key}
                       onChange={(value) =>
                         updateConfig("online_asr_config", { ...config.online_asr_config, app_key: value })
                       }
                     />
                     <Field
-                      label="访问密钥"
+                      label="access_key"
                       value={config.online_asr_config.access_key}
                       onChange={(value) =>
                         updateConfig("online_asr_config", { ...config.online_asr_config, access_key: value })
                       }
                     />
                     <Field
-                      label="资源 ID"
+                      label="resource_id"
                       value={config.online_asr_config.resource_id}
                       onChange={(value) =>
                         updateConfig("online_asr_config", { ...config.online_asr_config, resource_id: value })
@@ -464,10 +471,43 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
                   </div>
                 </Section>
 
+                <Section title="语言模型">
+                  <div className="mb-4 rounded-md bg-neutral-100 px-4 py-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="font-medium text-neutral-700">OpenAI 兼容</span>
+                      <span className="text-neutral-400">·</span>
+                      <span className="text-neutral-500">支持 OpenAI 格式的任意模型服务</span>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Field label="base_url" value={config.llm_config.base_url} onChange={(value) => updateLlm("base_url", value)} />
+                      <Field label="model" value={config.llm_config.model} onChange={(value) => updateLlm("model", value)} />
+                    </div>
+                    <Field
+                      label="api_key"
+                      type="password"
+                      value={config.llm_config.api_key}
+                      onChange={(value) => updateLlm("api_key", value)}
+                    />
+                    <div className="flex flex-wrap items-center gap-3">
+                      <PrimaryButton onClick={testLlm} disabled={testingLlm}>
+                        {testingLlm && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {testingLlm ? "测试中..." : "测试连接"}
+                      </PrimaryButton>
+                      {llmResult && (
+                        <span className={`text-sm ${llmResult.success ? "text-emerald-600" : "text-red-600"}`}>
+                          {llmResult.message}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Section>
+
                 <Section title="网络代理">
                   <ToggleRow
                     title="启用代理"
-                    desc="识别和润色共用同一个代理"
+                    desc="语音识别和语言模型共用同一个代理"
                     active={config.proxy.enabled}
                     onToggle={() => updateProxy("enabled", !config.proxy.enabled)}
                   />
@@ -489,32 +529,6 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
                     active={config.llm_config.enabled}
                     onToggle={() => updateLlm("enabled", !config.llm_config.enabled)}
                   />
-                </Section>
-
-                <Section title="服务配置">
-                  <div className="space-y-3">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <Field label="服务地址" value={config.llm_config.base_url} onChange={(value) => updateLlm("base_url", value)} />
-                      <Field label="模型" value={config.llm_config.model} onChange={(value) => updateLlm("model", value)} />
-                    </div>
-                    <Field
-                      label="接口密钥"
-                      type="password"
-                      value={config.llm_config.api_key}
-                      onChange={(value) => updateLlm("api_key", value)}
-                    />
-                    <div className="flex flex-wrap items-center gap-3">
-                      <PrimaryButton onClick={testLlm} disabled={testingLlm}>
-                        {testingLlm && <Loader2 className="h-4 w-4 animate-spin" />}
-                        {testingLlm ? "测试中..." : "测试连接"}
-                      </PrimaryButton>
-                      {llmResult && (
-                        <span className={`text-sm ${llmResult.success ? "text-emerald-600" : "text-red-600"}`}>
-                          {llmResult.message}
-                        </span>
-                      )}
-                    </div>
-                  </div>
                 </Section>
 
                 <Section title="场景设置">
@@ -643,7 +657,7 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
               </div>
               <div>
                 <h3 className="text-base font-semibold text-neutral-900">还没有完成设置</h3>
-                <p className="mt-1 text-sm text-neutral-500">请先选择输入设备并填写识别凭证。</p>
+                <p className="mt-1 text-sm text-neutral-500">请先选择输入设备，并填写语音识别和语言模型的凭证。</p>
               </div>
             </div>
             <div className="mt-6 flex justify-end">
@@ -832,16 +846,25 @@ function SkillCard({
   onToggle: () => void;
   onKeywordsChange: (value: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
-    <div className="border-b border-neutral-200 py-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-sm text-neutral-900">{name}</div>
-          <div className="mt-0.5 text-xs text-neutral-400">命中后执行，不粘贴文本</div>
-        </div>
+    <div className="border-b border-neutral-200">
+      <div className="flex items-center justify-between gap-4 py-3">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex flex-1 items-center gap-2 text-left"
+        >
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 flex-shrink-0 text-neutral-400" />
+          ) : (
+            <ChevronRight className="h-4 w-4 flex-shrink-0 text-neutral-400" />
+          )}
+          <span className="text-sm text-neutral-900">{name}</span>
+        </button>
         <button
           onClick={onToggle}
-          className="relative mt-1 h-4 w-7 flex-shrink-0"
+          className="relative h-4 w-7 flex-shrink-0"
         >
           <div className="absolute left-0.5 right-0.5 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-200" />
           <div
@@ -858,14 +881,19 @@ function SkillCard({
           />
         </button>
       </div>
-      <div className="mt-3">
-        <label className="mb-2 block text-sm font-medium text-neutral-600">关键词</label>
-        <input
-          value={keywords}
-          onChange={(event) => onKeywordsChange(event.target.value)}
-          className="input-underline w-full py-2 text-neutral-900"
-        />
-      </div>
+      {expanded && (
+        <div className="pb-4 pl-6">
+          <div className="mb-3 text-xs text-neutral-400">命中后执行，不粘贴文本</div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-neutral-600">关键词</label>
+            <input
+              value={keywords}
+              onChange={(event) => onKeywordsChange(event.target.value)}
+              className="input-underline w-full py-2 text-neutral-900"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

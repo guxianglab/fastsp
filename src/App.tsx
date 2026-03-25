@@ -31,7 +31,8 @@ function App() {
     Promise.all([api.getConfig(), api.getAsrStatus()]).then(([config, asrStatus]) => {
       const noDevice = !config.input_device || config.input_device === "";
       const noAsr = !asrStatus.configured;
-      if (noDevice || noAsr) {
+      const noLlm = !config.llm_config.base_url || !config.llm_config.api_key;
+      if (noDevice || noAsr || noLlm) {
         setNeedsSetup(true);
         setIsSettingsOpen(true);
       }
@@ -75,8 +76,9 @@ function App() {
       Promise.all([api.getConfig(), api.getAsrStatus()]).then(([config, asrStatus]) => {
         const hasDevice = config.input_device && config.input_device !== "";
         const hasAsr = asrStatus.configured;
+        const hasLlm = config.llm_config.base_url && config.llm_config.api_key;
         setAsrConfigured(hasAsr);
-        if (hasDevice && hasAsr) {
+        if (hasDevice && hasAsr && hasLlm) {
           setNeedsSetup(false);
           setIsSettingsOpen(false);
         }
