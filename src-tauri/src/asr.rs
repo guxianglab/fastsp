@@ -9,6 +9,7 @@ use std::thread::{self, JoinHandle};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
+use tokio::time::{timeout, Duration};
 use tokio_tungstenite::tungstenite::http::header::HeaderValue;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::{self, Message};
@@ -16,12 +17,14 @@ use tokio_tungstenite::client_async_tls_with_config;
 use tokio_socks::tcp::{Socks4Stream, Socks5Stream};
 
 const ASYNC_URL: &str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async";
+const ASR_CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+const ASR_FINAL_RESPONSE_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Clone)]
 pub struct AsrService {}
 
 pub struct StreamingSession {
-    handle: Option<JoinHandle<String>>,
+    handle: Option<JoinHandle<Result<String>>>,
     tx: Option<mpsc::Sender<Vec<f32>>>,
 }
 
@@ -30,7 +33,7 @@ impl StreamingSession {
         self.tx.take();
         if let Some(handle) = self.handle.take() {
             match handle.join() {
-                Ok(text) => Ok(text),
+                Ok(result) => result,
                 Err(_) => Err(anyhow!("Transcription thread panicked")),
             }
         } else {
@@ -84,11 +87,19 @@ impl AsrService {
                     headers.insert("X-Api-Connect-Id", HeaderValue::from_str(&uuid::Uuid::new_v4().to_string()).unwrap());
                 }
 
-                let (ws_stream, response) = match connect_ws(request, &proxy).await {
-                    Ok(res) => res,
-                    Err(e) => {
+                let (ws_stream, response) = match timeout(ASR_CONNECT_TIMEOUT, connect_ws(request, &proxy)).await {
+                    Ok(Ok(res)) => res,
+                    Ok(Err(e)) => {
                         eprintln!("[ASR] WebSocket connection failed: {}", e);
-                        return String::new();
+                        return Err(e);
+                    }
+                    Err(_) => {
+                        let err = anyhow!(
+                            "ASR websocket connection timed out after {}s",
+                            ASR_CONNECT_TIMEOUT.as_secs()
+                        );
+                        eprintln!("[ASR] {}", err);
+                        return Err(err);
                     }
                 };
 
@@ -131,7 +142,7 @@ impl AsrService {
 
                 if let Err(e) = write.send(Message::Binary(msg.into())).await {
                     eprintln!("[ASR] Failed to send full client request: {}", e);
-                    return String::new();
+                    return Err(anyhow!("Failed to send ASR init request: {}", e));
                 }
 
                 let mut seq: i32 = 2;
@@ -229,9 +240,16 @@ impl AsrService {
                     None => build_empty_last_audio_message(seq),
                 };
                 let _ = write.send(Message::Binary(final_msg.into())).await;
+                let _ = write.close().await;
                 
-                // Wait for read to finish and return text
-                read_task.await.unwrap_or_default()
+                // Once the last audio packet is sent, the server should finish quickly.
+                match timeout(ASR_FINAL_RESPONSE_TIMEOUT, read_task).await {
+                    Ok(join_result) => Ok(join_result.unwrap_or_default()),
+                    Err(_) => Err(anyhow!(
+                        "ASR final response timed out after {}s",
+                        ASR_FINAL_RESPONSE_TIMEOUT.as_secs()
+                    )),
+                }
             })
         });
 
