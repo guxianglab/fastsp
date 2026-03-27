@@ -709,7 +709,7 @@ pub fn get_default_skills() -> Vec<SkillConfig> {
         SkillConfig::new(
             SWITCH_POLISH_SCENE_SKILL_ID,
             "切换润色场景",
-            "切换到,切到,使用",
+            "切换到,切到,切换成,切成,使用",
         ),
     ]
 }
@@ -748,6 +748,7 @@ pub fn merge_with_default_skills(existing_skills: Vec<SkillConfig>) -> (Vec<Skil
 
 fn merge_skill_defaults(skill: &mut SkillConfig, default_skill: &SkillConfig) -> bool {
     let mut changed = false;
+    changed |= merge_builtin_keywords(&mut skill.keywords, &default_skill.keywords);
     changed |= merge_sub_commands(&mut skill.sub_commands, &default_skill.sub_commands);
 
     match (&mut skill.browser_options, &default_skill.browser_options) {
@@ -777,6 +778,29 @@ fn merge_skill_defaults(skill: &mut SkillConfig, default_skill: &SkillConfig) ->
     }
 
     changed
+}
+
+fn merge_builtin_keywords(existing_keywords: &mut String, default_keywords: &str) -> bool {
+    let existing: HashSet<String> = existing_keywords
+        .split(',')
+        .map(|keyword| keyword.trim().to_lowercase())
+        .filter(|keyword| !keyword.is_empty())
+        .collect();
+    let missing: Vec<&str> = default_keywords
+        .split(',')
+        .map(str::trim)
+        .filter(|keyword| !keyword.is_empty() && !existing.contains(&keyword.to_lowercase()))
+        .collect();
+
+    if missing.is_empty() {
+        return false;
+    }
+
+    if !existing_keywords.trim().is_empty() && !existing_keywords.trim_end().ends_with(',') {
+        existing_keywords.push(',');
+    }
+    existing_keywords.push_str(&missing.join(","));
+    true
 }
 
 fn merge_sub_commands(
@@ -2035,6 +2059,27 @@ mod tests {
             .sites
             .iter()
             .any(|site| site.id == "bilibili"));
+    }
+
+    #[test]
+    fn merge_with_default_skills_appends_missing_builtin_keywords() {
+        let legacy_switch_scene = SkillConfig {
+            id: SWITCH_POLISH_SCENE_SKILL_ID.to_string(),
+            name: "切换润色场景".to_string(),
+            keywords: "切换到,切到,使用".to_string(),
+            enabled: true,
+            sub_commands: Vec::new(),
+            browser_options: None,
+            windows_options: None,
+        };
+
+        let (merged, changed) = merge_with_default_skills(vec![legacy_switch_scene]);
+        let switch_scene =
+            find_skill_config(&merged, SWITCH_POLISH_SCENE_SKILL_ID).expect("switch scene skill");
+
+        assert!(changed);
+        assert!(switch_scene.keywords.contains("切换成"));
+        assert!(switch_scene.keywords.contains("切成"));
     }
 
     #[test]

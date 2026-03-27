@@ -965,8 +965,14 @@ mod tests {
 
         assert!(changed);
         assert!(notice.is_none());
-        assert!(!config.skills.iter().any(|skill| skill.id == "enable_polish"));
-        assert!(!config.skills.iter().any(|skill| skill.id == "disable_polish"));
+        assert!(!config
+            .skills
+            .iter()
+            .any(|skill| skill.id == "enable_polish"));
+        assert!(!config
+            .skills
+            .iter()
+            .any(|skill| skill.id == "disable_polish"));
         assert!(config
             .skills
             .iter()

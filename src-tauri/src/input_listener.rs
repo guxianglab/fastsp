@@ -15,7 +15,9 @@ pub enum InputEvent {
     StartSkill,
     StopSkill,
     MouseMove,
-    DictationFinalizeWindowElapsed { session_id: u64 },
+    DictationFinalizeWindowElapsed {
+        session_id: u64,
+    },
     DictationAsrFinished {
         session_id: u64,
         result: Result<String, String>,

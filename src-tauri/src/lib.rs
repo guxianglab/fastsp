@@ -1,4 +1,4 @@
-﻿mod asr;
+mod asr;
 mod audio;
 mod http_client;
 mod input_listener;
@@ -880,6 +880,23 @@ async fn execute_skill_transcript_streaming<R: Runtime>(
                     .unwrap_or(clause_text.len());
 
                 if skills::is_config_skill(&skill_match.skill_id) {
+                    if !is_final {
+                        let wait_reason = if config_skill_requires_more_input(
+                            clause_text,
+                            skill_match,
+                            next_match,
+                        ) {
+                            "more input"
+                        } else {
+                            "final transcript"
+                        };
+                        println!(
+                            "[SKILL] #{} Waiting for {} before executing config skill: {}",
+                            seq_id, wait_reason, skill_match.skill_id
+                        );
+                        return;
+                    }
+
                     let action_key = format!("config:{}", skill_match.skill_id);
                     if !reserve_skill_action(skill_state, skill_session_id, &action_key) {
                         continue;
@@ -1121,7 +1138,10 @@ async fn execute_skill_transcript_streaming<R: Runtime>(
                             return;
                         }
                     } else {
-                        clear_streaming_browser_open_action_candidate(skill_state, skill_session_id);
+                        clear_streaming_browser_open_action_candidate(
+                            skill_state,
+                            skill_session_id,
+                        );
                     }
 
                     if execute_reserved_windows_plan(
@@ -1142,7 +1162,10 @@ async fn execute_skill_transcript_streaming<R: Runtime>(
                             text,
                             transcript_offset + plan.consumed_end.min(clause_consumed_end),
                         );
-                        clear_streaming_browser_open_action_candidate(skill_state, skill_session_id);
+                        clear_streaming_browser_open_action_candidate(
+                            skill_state,
+                            skill_session_id,
+                        );
                         println!("[SKILL] #{} Executed Windows fallback successfully", seq_id);
                         continue;
                     }
@@ -1174,7 +1197,10 @@ async fn execute_skill_transcript_streaming<R: Runtime>(
                             return;
                         }
                     } else {
-                        clear_streaming_browser_open_action_candidate(skill_state, skill_session_id);
+                        clear_streaming_browser_open_action_candidate(
+                            skill_state,
+                            skill_session_id,
+                        );
                     }
 
                     if execute_reserved_browser_plan(
@@ -1195,7 +1221,10 @@ async fn execute_skill_transcript_streaming<R: Runtime>(
                             text,
                             transcript_offset + plan.consumed_end.min(clause_consumed_end),
                         );
-                        clear_streaming_browser_open_action_candidate(skill_state, skill_session_id);
+                        clear_streaming_browser_open_action_candidate(
+                            skill_state,
+                            skill_session_id,
+                        );
                         println!("[SKILL] #{} Executed browser fallback successfully", seq_id);
                         continue;
                     }
@@ -1210,6 +1239,16 @@ async fn execute_skill_transcript_streaming<R: Runtime>(
                 }
                 Err(_) => {}
             }
+        }
+
+        if clause_consumed_end < effective_text.len() {
+            advance_skill_transcript_consumed(
+                skill_state,
+                skill_session_id,
+                text,
+                transcript_offset + clause_consumed_end,
+            );
+            continue;
         }
 
         return;
@@ -1231,16 +1270,7 @@ async fn execute_reserved_windows_plan<R: Runtime>(
         return false;
     }
 
-    match execute_windows_plan(
-        app_handle,
-        windows_skill,
-        plan,
-        config,
-        llm_cancel,
-        seq_id,
-    )
-    .await
-    {
+    match execute_windows_plan(app_handle, windows_skill, plan, config, llm_cancel, seq_id).await {
         Ok(_) => {
             complete_skill_action(skill_state, skill_session_id, &action_key, true);
             true
@@ -1269,16 +1299,7 @@ async fn execute_reserved_browser_plan<R: Runtime>(
         return false;
     }
 
-    match execute_browser_plan(
-        app_handle,
-        browser_skill,
-        plan,
-        config,
-        llm_cancel,
-        seq_id,
-    )
-    .await
-    {
+    match execute_browser_plan(app_handle, browser_skill, plan, config, llm_cancel, seq_id).await {
         Ok(_) => {
             complete_skill_action(skill_state, skill_session_id, &action_key, true);
             true
@@ -1538,7 +1559,10 @@ fn normalize_direct_windows_query(query: &str) -> String {
     let mut normalized = query
         .trim_matches(|ch: char| {
             ch.is_whitespace()
-                || matches!(ch, ',' | ';' | '.' | ':' | '\n' | '\r' | '\u{ff0c}' | '\u{ff1b}' | '\u{3002}')
+                || matches!(
+                    ch,
+                    ',' | ';' | '.' | ':' | '\n' | '\r' | '\u{ff0c}' | '\u{ff1b}' | '\u{3002}'
+                )
         })
         .trim()
         .to_string();
@@ -1609,7 +1633,10 @@ fn split_skill_clause(text: &str) -> (&str, usize) {
     let mut boundary: Option<(usize, usize)> = None;
 
     for (idx, ch) in text.char_indices() {
-        if matches!(ch, ',' | ';' | '\n' | '\r' | '\u{ff0c}' | '\u{ff1b}' | '\u{3002}') {
+        if matches!(
+            ch,
+            ',' | ';' | '\n' | '\r' | '\u{ff0c}' | '\u{ff1b}' | '\u{3002}'
+        ) {
             boundary = Some((idx, ch.len_utf8()));
             break;
         }
@@ -1632,7 +1659,10 @@ fn split_skill_clause(text: &str) -> (&str, usize) {
 
     let clause = text[..boundary_start].trim_end_matches(|ch: char| {
         ch.is_whitespace()
-            || matches!(ch, ',' | ';' | '.' | ':' | '\u{ff0c}' | '\u{ff1b}' | '\u{3002}')
+            || matches!(
+                ch,
+                ',' | ';' | '.' | ':' | '\u{ff0c}' | '\u{ff1b}' | '\u{3002}'
+            )
     });
     let mut consumed_end = boundary_start + boundary_len;
 
@@ -1641,7 +1671,10 @@ fn split_skill_clause(text: &str) -> (&str, usize) {
             break;
         };
         if next_char.is_whitespace()
-            || matches!(next_char, ',' | ';' | '.' | ':' | '\u{ff0c}' | '\u{ff1b}' | '\u{3002}')
+            || matches!(
+                next_char,
+                ',' | ';' | '.' | ':' | '\u{ff0c}' | '\u{ff1b}' | '\u{3002}'
+            )
         {
             consumed_end += next_char.len_utf8();
             continue;
@@ -2101,6 +2134,19 @@ async fn execute_windows_plan<R: Runtime>(
         emit_voice_command_feedback(app_handle, "info", note);
     }
     Ok(())
+}
+
+fn config_skill_requires_more_input(
+    transcript: &str,
+    skill_match: &skills::SkillMatch,
+    next_match: Option<&skills::SkillMatch>,
+) -> bool {
+    match skill_match.skill_id.as_str() {
+        skills::SWITCH_POLISH_SCENE_SKILL_ID => {
+            skills::extract_scene_query(transcript, skill_match, next_match).is_empty()
+        }
+        _ => false,
+    }
 }
 
 fn plan_config_skill_update(
@@ -3002,9 +3048,10 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        advance_skill_transcript_consumed, confirm_streaming_browser_open_action,
-        plan_config_skill_update, prepare_skill_transcript, AppConfig, ConfigSkillPlan,
-        SkillExecutionSession, SkillExecutionState, VoiceCommandFeedback,
+        advance_skill_transcript_consumed, config_skill_requires_more_input,
+        confirm_streaming_browser_open_action, plan_config_skill_update, prepare_skill_transcript,
+        AppConfig, ConfigSkillPlan, SkillExecutionSession, SkillExecutionState,
+        VoiceCommandFeedback,
     };
     use crate::skills::{SkillMatch, SWITCH_POLISH_SCENE_SKILL_ID};
     use crate::storage::PromptProfile;
@@ -3049,6 +3096,21 @@ mod tests {
 
         assert_eq!(clause, "控制面板");
         assert_eq!(&input[consumed_end..], "打开命令提示符");
+    }
+
+    #[test]
+    fn prepare_skill_transcript_can_continue_after_unmatched_intro_clause() {
+        let state = test_skill_state();
+        let transcript = "那现在的话，我可以直接跟他说，帮我切换到中译英";
+        let (first_clause, consumed_end) = super::split_skill_clause(transcript);
+
+        assert_eq!(first_clause, "那现在的话");
+
+        advance_skill_transcript_consumed(&state, 7, transcript, consumed_end);
+        let prepared =
+            prepare_skill_transcript(&state, 7, transcript).expect("expected remaining clause");
+
+        assert_eq!(prepared.0, "我可以直接跟他说，帮我切换到中译英");
     }
 
     #[test]
@@ -3142,6 +3204,27 @@ mod tests {
             }
             ConfigSkillPlan::Save { .. } => panic!("expected ambiguity feedback"),
         }
+    }
+
+    #[test]
+    fn switch_scene_waits_for_scene_name_during_streaming() {
+        let skill_match = SkillMatch {
+            skill_id: SWITCH_POLISH_SCENE_SKILL_ID.to_string(),
+            keyword: "切换到".to_string(),
+            start: 0,
+            end: "切换到".len(),
+        };
+
+        assert!(config_skill_requires_more_input(
+            "切换到",
+            &skill_match,
+            None
+        ));
+        assert!(!config_skill_requires_more_input(
+            "切换到中译英",
+            &skill_match,
+            None
+        ));
     }
 
     #[test]
