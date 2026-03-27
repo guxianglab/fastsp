@@ -11,10 +11,15 @@ const HOLD_THRESHOLD_MS: u64 = 350;
 
 #[derive(Debug, Clone)]
 pub enum InputEvent {
-    Toggle,
+    Click,
     StartSkill,
     StopSkill,
     MouseMove,
+    DictationFinalizeWindowElapsed { session_id: u64 },
+    DictationAsrFinished {
+        session_id: u64,
+        result: Result<String, String>,
+    },
 }
 
 #[inline]
@@ -164,7 +169,7 @@ impl HoldTrigger {
         if self.skill_active.swap(false, Ordering::AcqRel) {
             tx.send(InputEvent::StopSkill).ok();
         } else {
-            tx.send(InputEvent::Toggle).ok();
+            tx.send(InputEvent::Click).ok();
         }
     }
 }

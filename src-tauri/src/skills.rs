@@ -8,8 +8,6 @@ use url::Url;
 
 use crate::storage::PromptProfile;
 
-pub const ENABLE_POLISH_SKILL_ID: &str = "enable_polish";
-pub const DISABLE_POLISH_SKILL_ID: &str = "disable_polish";
 pub const SWITCH_POLISH_SCENE_SKILL_ID: &str = "switch_polish_scene";
 pub const OPEN_BROWSER_SKILL_ID: &str = "open_browser";
 pub const OPEN_WINDOWS_SKILL_ID: &str = "open_windows";
@@ -236,8 +234,6 @@ pub enum BuiltinSkillId {
     OpenNotepad,
     OpenExplorer,
     Screenshot,
-    EnablePolish,
-    DisablePolish,
     SwitchPolishScene,
 }
 
@@ -669,18 +665,13 @@ impl BuiltinSkillId {
             "open_notepad" => Some(Self::OpenNotepad),
             "open_explorer" => Some(Self::OpenExplorer),
             "screenshot" => Some(Self::Screenshot),
-            ENABLE_POLISH_SKILL_ID => Some(Self::EnablePolish),
-            DISABLE_POLISH_SKILL_ID => Some(Self::DisablePolish),
             SWITCH_POLISH_SCENE_SKILL_ID => Some(Self::SwitchPolishScene),
             _ => None,
         }
     }
 
     fn is_config_control(&self) -> bool {
-        matches!(
-            self,
-            Self::EnablePolish | Self::DisablePolish | Self::SwitchPolishScene
-        )
+        matches!(self, Self::SwitchPolishScene)
     }
 }
 
@@ -716,16 +707,6 @@ pub fn get_default_skills() -> Vec<SkillConfig> {
         ),
         SkillConfig::new("screenshot", "截图", "截图,截屏,屏幕截图"),
         SkillConfig::new(
-            ENABLE_POLISH_SKILL_ID,
-            "启用润色",
-            "启用润色,打开润色,开启润色",
-        ),
-        SkillConfig::new(
-            DISABLE_POLISH_SKILL_ID,
-            "关闭润色",
-            "关闭润色,停用润色,禁用润色",
-        ),
-        SkillConfig::new(
             SWITCH_POLISH_SCENE_SKILL_ID,
             "切换润色场景",
             "切换到,切到,使用",
@@ -735,9 +716,16 @@ pub fn get_default_skills() -> Vec<SkillConfig> {
 
 pub fn merge_with_default_skills(existing_skills: Vec<SkillConfig>) -> (Vec<SkillConfig>, bool) {
     let defaults = get_default_skills();
-    let mut merged = existing_skills;
-    let existing_ids: HashSet<String> = merged.iter().map(|skill| skill.id.clone()).collect();
     let mut changed = false;
+    let mut merged: Vec<SkillConfig> = existing_skills
+        .into_iter()
+        .filter(|skill| {
+            let keep = !matches!(skill.id.as_str(), "enable_polish" | "disable_polish");
+            changed |= !keep;
+            keep
+        })
+        .collect();
+    let existing_ids: HashSet<String> = merged.iter().map(|skill| skill.id.clone()).collect();
 
     for skill in &mut merged {
         if let Some(default_skill) = defaults
@@ -1504,9 +1492,7 @@ pub fn execute_skill(skill_id: &str) -> Result<(), String> {
                 .map_err(|e| format!("Failed to trigger screenshot: {}", e))?;
             Ok(())
         }
-        Some(BuiltinSkillId::EnablePolish)
-        | Some(BuiltinSkillId::DisablePolish)
-        | Some(BuiltinSkillId::SwitchPolishScene) => Err(format!(
+        Some(BuiltinSkillId::SwitchPolishScene) => Err(format!(
             "Config skill '{}' must be handled by the transcription pipeline",
             skill_id
         )),
@@ -2183,7 +2169,7 @@ mod tests {
     fn test_extract_scene_query_stops_before_next_skill() {
         let matches = vec![
             SkillMatch {
-                skill_id: ENABLE_POLISH_SKILL_ID.to_string(),
+                skill_id: "dummy".to_string(),
                 keyword: "启用润色".to_string(),
                 start: 0,
                 end: "启用润色".len(),

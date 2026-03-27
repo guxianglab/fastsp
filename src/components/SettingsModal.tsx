@@ -638,8 +638,8 @@ export function SettingsModal({ isOpen, onClose, isFirstSetup = false }: Setting
               <div className="space-y-5">
                 <Section title="启用功能">
                   <ToggleRow
-                    title="启用润色"
-                    desc="只在听写模式下生效"
+                    title="强制开启润色"
+                    desc="开启后所有普通听写都走润色；关闭后通过双击开始或双击结束决定本次是否润色"
                     active={config.llm_config.enabled}
                     onToggle={() => updateLlm("enabled", !config.llm_config.enabled)}
                   />

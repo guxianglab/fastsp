@@ -919,11 +919,54 @@ mod tests {
         assert!(config
             .skills
             .iter()
-            .any(|skill| skill.id == "enable_polish"));
-        assert!(config
-            .skills
-            .iter()
-            .any(|skill| skill.id == "disable_polish"));
+            .any(|skill| skill.id == "switch_polish_scene"));
+    }
+
+    #[test]
+    fn removes_legacy_polish_toggle_skills_from_existing_config() {
+        let value = json!({
+            "trigger_mouse": true,
+            "trigger_toggle": true,
+            "online_asr_config": {},
+            "input_device": "",
+            "llm_config": {
+                "enabled": false,
+                "base_url": "https://api.openai.com/v1",
+                "api_key": "",
+                "model": "gpt-4o-mini",
+                "profiles": [{
+                    "id": "default",
+                    "name": "Default",
+                    "voice_aliases": []
+                }],
+                "active_profile_id": "default"
+            },
+            "proxy": {},
+            "skills": [{
+                "id": "enable_polish",
+                "name": "Enable polish",
+                "keywords": "enable polish",
+                "enabled": true
+            }, {
+                "id": "disable_polish",
+                "name": "Disable polish",
+                "keywords": "disable polish",
+                "enabled": true
+            }, {
+                "id": "switch_polish_scene",
+                "name": "Switch scene",
+                "keywords": "switch scene",
+                "enabled": true
+            }]
+        });
+
+        let (config, changed, notice) =
+            recover_app_config_from_object(value.as_object().unwrap().clone());
+
+        assert!(changed);
+        assert!(notice.is_none());
+        assert!(!config.skills.iter().any(|skill| skill.id == "enable_polish"));
+        assert!(!config.skills.iter().any(|skill| skill.id == "disable_polish"));
         assert!(config
             .skills
             .iter()

@@ -8,12 +8,15 @@ interface StatusSectionProps {
 
 export function StatusSection({ isRecording, asrConfigured, onSettingsClick }: StatusSectionProps) {
   const statusText = isRecording ? "录音中" : asrConfigured ? "待机中" : "需要完成设置";
-  const helperText = isRecording ? "松开后自动转写" : asrConfigured ? "按快捷键开始说话" : "先配置麦克风和识别服务";
+  const helperText = isRecording
+    ? "松开后自动转写"
+    : asrConfigured
+      ? "单击开始，双击触发润色，长按执行技能"
+      : "先配置麦克风和识别服务";
 
   return (
     <section className="flex items-center justify-between py-4">
       <div data-tauri-drag-region className="flex items-center gap-4">
-        {/* Status indicator dot */}
         <div className="relative flex h-3 w-3 items-center justify-center">
           {isRecording ? (
             <>
@@ -27,14 +30,12 @@ export function StatusSection({ isRecording, asrConfigured, onSettingsClick }: S
           )}
         </div>
 
-        {/* Status text */}
         <div>
           <div className="text-sm text-neutral-900">{statusText}</div>
           <div className="text-xs text-neutral-400">{helperText}</div>
         </div>
       </div>
 
-      {/* Settings button */}
       <button
         onClick={onSettingsClick}
         className="p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-700"

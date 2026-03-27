@@ -25,9 +25,9 @@
       background: transparent;
     }
 
-    /* ─────────────────────────────────────────────
-       胶囊容器 - Glassmorphic Pill
-       ───────────────────────────────────────────── */
+    /* 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
+       闁煎疇娉涘▔顓犫偓鍦嚀濞?- Glassmorphic Pill
+       闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?*/
     .capsule {
       background: rgba(15, 23, 42, 0.7);
       backdrop-filter: blur(16px);
@@ -51,7 +51,7 @@
       box-shadow:
         0 10px 30px -5px rgba(0, 0, 0, 0.5),
         inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-      /* 初始隐藏，等待显示 */
+      /* 闁告帗绻傞～鎰版⒕閹邦垱顥戦柨娑樼灱閻℃垵顕ラ崨顔解枖缂佲偓?*/
       opacity: 0;
     }
 
@@ -77,9 +77,70 @@
         inset 0 0 0 1px rgba(255, 255, 255, 0.1);
     }
 
-    /* ─────────────────────────────────────────────
-       退场动画
-       ───────────────────────────────────────────── */
+    .capsule.intent-raw {
+      background: rgba(248, 250, 252, 0.88);
+      border-color: rgba(148, 163, 184, 0.35);
+      box-shadow:
+        0 12px 32px -8px rgba(15, 23, 42, 0.18),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+    }
+
+    .capsule.intent-raw.has-text {
+      background: rgba(248, 250, 252, 0.94);
+      box-shadow:
+        0 14px 34px -10px rgba(15, 23, 42, 0.2),
+        0 0 24px -18px rgba(148, 163, 184, 0.75);
+    }
+
+    .capsule.intent-raw.processing {
+      background: rgba(241, 245, 249, 0.96);
+      border-color: rgba(148, 163, 184, 0.5);
+      box-shadow:
+        0 0 20px -8px rgba(148, 163, 184, 0.55),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+    }
+
+    .capsule.intent-polish {
+      background: rgba(15, 23, 42, 0.82);
+      border-color: rgba(79, 157, 154, 0.22);
+    }
+
+    .capsule.intent-polish.has-text {
+      background: rgba(15, 23, 42, 0.88);
+      box-shadow:
+        0 15px 35px -5px rgba(0, 0, 0, 0.6),
+        0 0 30px -10px rgba(79, 157, 154, 0.3);
+    }
+
+    .capsule.intent-polish.processing {
+      border-color: rgba(79, 157, 154, 0.42);
+      box-shadow:
+        0 0 25px -5px rgba(79, 157, 154, 0.42),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+
+    .capsule.intent-skill {
+      background: rgba(6, 78, 59, 0.84);
+      border-color: rgba(74, 222, 128, 0.22);
+    }
+
+    .capsule.intent-skill.has-text {
+      background: rgba(6, 78, 59, 0.9);
+      box-shadow:
+        0 15px 35px -5px rgba(0, 0, 0, 0.55),
+        0 0 28px -12px rgba(74, 222, 128, 0.32);
+    }
+
+    .capsule.intent-skill.processing {
+      border-color: rgba(74, 222, 128, 0.4);
+      box-shadow:
+        0 0 25px -6px rgba(74, 222, 128, 0.35),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+
+    /* 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
+       闂侇偀鍋撻柛锕€鎼慨鈺呮偨?
+       闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?*/
     .capsule.fade-out {
       animation: fadeOut 0.5s ease-out forwards;
     }
@@ -97,9 +158,9 @@
       }
     }
 
-    /* ─────────────────────────────────────────────
-       Dots 容器
-       ───────────────────────────────────────────── */
+    /* 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
+       Dots 閻庡湱鎳撳▍?
+       闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?*/
     .dots-wrapper {
       display: flex;
       align-items: center;
@@ -117,19 +178,19 @@
       transform-origin: center;
     }
 
-    .dot-1 { background: #38bdf8; } /* 天蓝 */
-    .dot-2 { background: #34d399; } /* 翠绿 */
-    .dot-3 { background: #a78bfa; } /* 紫色 */
-    .dot-4 { background: #f472b6; } /* 粉红 */
+    .dot-1 { background: #38bdf8; } /* 濠㈠灈鏅為幗?*/
+    .dot-2 { background: #34d399; } /* 缂傚牏濮风挒?*/
+    .dot-3 { background: #a78bfa; } /* 缂侀硸鍋夋竟?*/
+    .dot-4 { background: #f472b6; } /* 缂侇喖顦辩€?*/
 
-    /* ─────────────────────────────────────────────
-       文字滚动容器
-       ───────────────────────────────────────────── */
+    /* 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
+       闁哄倸娲ら悺褍顭ㄥ顒€袟閻庡湱鎳撳▍?
+       闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?*/
     .text-scroller {
       overflow-x: hidden;
       white-space: nowrap;
       scroll-behavior: smooth;
-      /* 左侧渐变消隐遮罩 */
+      /* 鐎归潻缂氶弲璺恒€掗幇顒€缍佹繛鎴濈墦濞堬綁鏌嗛鎯у厞 */
       -webkit-mask-image: linear-gradient(
         to right,
         transparent 0%,
@@ -167,9 +228,14 @@
       text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
     }
 
-    /* ─────────────────────────────────────────────
-       错误状态显示
-       ───────────────────────────────────────────── */
+    .capsule.intent-raw .text-content {
+      color: #0f172a;
+      text-shadow: none;
+    }
+
+    /* 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
+       闂佹寧鐟ㄩ銈夋偐閼哥鍋撴担瑙勨枖缂佲偓?
+       闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?*/
     .error-message {
       position: fixed;
       bottom: 10px;
@@ -205,39 +271,40 @@
   <div class="error-message" id="errorMessage"></div>
 
   <script>
-    // ─────────────────────────────────────────────
-    // DOM 元素引用
-    // ─────────────────────────────────────────────
+    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
+    // DOM 闁稿繐鍟扮粈灞筋嚕閺囩姵鏆?
+    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
     const capsule = document.getElementById('capsule');
     const scroller = document.getElementById('scroller');
     const textContent = document.getElementById('textContent');
     const errorMessage = document.getElementById('errorMessage');
     const dots = Array.from(document.querySelectorAll('.dot'));
 
-    // ─────────────────────────────────────────────
-    // 状态变量
-    // ─────────────────────────────────────────────
+    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
+    // 闁绘鍩栭埀顑跨瑜板鏌?
+    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
     let isRecording = false;
     let isProcessing = false;
     let isLlmProcessing = false;
     let streamText = '';
     let isFadingOut = false;
+    let dictationIntent = 'none';
 
-    // 音量平滑
+    // 闂傚﹥濞婇崳娲嵁閾忣偆鎷?
     let targetLevel = 0;
     let smoothedLevel = 0;
 
-    // Tauri API 引用
+    // Tauri API 鐎殿喗娲滈弫?
     let tauriEvent = null;
     let tauriWindow = null;
 
-    // ─────────────────────────────────────────────
-    // 工具函数
-    // ─────────────────────────────────────────────
+    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
+    // 鐎规悶鍎遍崣鍧楀礄閼恒儲娈?
+    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
 
     /**
-     * 等待 Tauri IPC 就绪
-     * 解决 window.__TAURI__ 未初始化的竞态条件
+     * 缂佹稑顦欢?Tauri IPC 閻忓繗浜崡?
+     * 閻熸瑱绲介崰?window.__TAURI__ 闁哄牜浜滈崹鍨叏鐎ｎ亜顕ч柣銊ュ閻濈敻骞€娴ｈ钂嬪ù?
      */
     function waitForTauri(timeout = 5000) {
       return new Promise((resolve, reject) => {
@@ -258,7 +325,7 @@
     }
 
     /**
-     * 显示错误信息
+     * 闁哄嫬澧介妵姘舵煥濞嗘帩鍤栧ǎ鍥ｅ墲娴?
      */
     function showError(msg) {
       console.error('[Indicator]', msg);
@@ -270,10 +337,18 @@
     }
 
     /**
-     * 重置所有状态
+     * 闂佹彃绉堕悿鍡涘箥閳ь剟寮垫径灞叫﹂柟?
      */
     function resetState() {
-      capsule.classList.remove('has-text', 'processing', 'fade-out', 'visible');
+      capsule.classList.remove(
+        'has-text',
+        'processing',
+        'fade-out',
+        'visible',
+        'intent-raw',
+        'intent-polish',
+        'intent-skill'
+      );
       streamText = '';
       textContent.textContent = '';
       targetLevel = 0;
@@ -282,10 +357,22 @@
       isProcessing = false;
       isLlmProcessing = false;
       isFadingOut = false;
+      dictationIntent = 'none';
+    }
+
+    function applyIntentClass() {
+      capsule.classList.remove('intent-raw', 'intent-polish', 'intent-skill');
+      if (dictationIntent === 'raw') {
+        capsule.classList.add('intent-raw');
+      } else if (dictationIntent === 'polish') {
+        capsule.classList.add('intent-polish');
+      } else if (dictationIntent === 'skill') {
+        capsule.classList.add('intent-skill');
+      }
     }
 
     /**
-     * 滚动到最右侧
+     * 婵犲﹥鑹炬慨鈺呭礆閻楀牊浠橀柛娆忓帠閺?
      */
     function scrollToEnd() {
       scroller.scrollTo({
@@ -295,14 +382,14 @@
     }
 
     /**
-     * 判断是否处于思考状态
+     * 闁告帇鍊栭弻鍥及椤栨碍鍎婂璺哄缁剟骞€濠靛ň鍋撻崘顏勑﹂柟?
      */
     function isThinking() {
       return !isRecording && (isProcessing || isLlmProcessing);
     }
 
     /**
-     * 开始退场动画
+     * 鐎殿喒鍋撳┑顔碱儔閳ь兘鍋撻柛锕€鎼慨鈺呮偨?
      */
     function startFadeOut() {
       if (isFadingOut) return;
@@ -310,26 +397,26 @@
 
       capsule.classList.add('fade-out');
 
-      // 等待动画完成后隐藏窗口
+      // 缂佹稑顦欢鐔煎礉閵娧勬毎閻庣懓鏈崹姘跺触鎼淬劍顓洪柦妯虹箳閻涖儵宕?
       setTimeout(() => {
         if (tauriWindow) {
           tauriWindow.getCurrentWindow().hide().catch(err => {
             console.error('[Indicator] Failed to hide window:', err);
           });
         }
-        // 重置状态为下次显示做准备
+        // 闂佹彃绉堕悿鍡涙偐閼哥鍋撴担鐤濞戞挸顑嗛濂稿及閸撗佷粵闁稿鑹鹃崳顖涘緞?
         resetState();
-      }, 500); // 匹配 CSS animation-duration
+      }, 500); // 闁告牕缍婇崢?CSS animation-duration
     }
 
-    // ─────────────────────────────────────────────
-    // 动画循环
-    // ─────────────────────────────────────────────
+    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
+    // 闁告柣鍔庨弫鎯ь嚗椤忓棗绠?
+    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
     function animate() {
       const time = Date.now();
 
       if (isThinking()) {
-        // 思考状态：紫色呼吸辉光
+        // 闁诡剚绻嗛埀顒€鍟版慨鎼佸箑娓氬﹦绐楃紒槌栧亯婢瑰﹪宕ㄩ悡搴㈠劎閺夊牆顦崢?
         dots.forEach((dot, i) => {
           const scale = Math.max(0.4, 0.6 + Math.sin(time / 300 + i * 0.8) * 0.6);
           const y = Math.sin(time / 150 + i) * 3;
@@ -337,7 +424,7 @@
           dot.style.filter = 'brightness(1.5) drop-shadow(0 0 4px rgba(167, 139, 250, 0.8))';
         });
       } else if (isRecording || smoothedLevel > 0.01) {
-        // 录音状态：跟随音量跳动
+        // 鐟滅増娲熼悡鍫曟偐閼哥鍋撴笟濠勭獥閻犺櫣鍠栧▓銏ゆ閹惰棄娅ら悹鍝勫暱婵?
         smoothedLevel += (targetLevel - smoothedLevel) * 0.25;
 
         dots.forEach((dot, i) => {
@@ -349,7 +436,7 @@
           dot.style.filter = 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))';
         });
       } else {
-        // 静止状态
+        // 闂傚牊鐟﹂娑㈡偐閼哥鍋?
         dots.forEach(dot => {
           dot.style.transform = 'scale(0.8) translateY(0)';
           dot.style.filter = 'none';
@@ -359,27 +446,36 @@
       requestAnimationFrame(animate);
     }
 
-    // ─────────────────────────────────────────────
-    // 事件处理
-    // ─────────────────────────────────────────────
+    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
+    // 濞存粌顑勫▎銏″緞閸曨厽鍊?
+    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
     function setupEventListeners(event) {
-      // 音量级别
+      event.listen('dictation_intent', (e) => {
+        dictationIntent = e.payload || 'none';
+        applyIntentClass();
+        if (dictationIntent !== 'none') {
+          capsule.classList.add('visible');
+        }
+      });
+
+      // 闂傚﹥濞婇崳铏圭棯瑜嶉崺?
       event.listen('audio_level', (e) => {
-        // 放大数据让反应更灵敏
+        // 闁衡偓閹佷海闁轰胶澧楀畵浣烘媼閳轰礁鍐€閹煎瓨姊瑰ú鍧楁倶閸偅娅?
         const raw = Math.min(e.payload * 8, 1.0);
         targetLevel = Math.sqrt(raw);
       });
 
-      // 录音状态
+      // 鐟滅増娲熼悡鍫曟偐閼哥鍋?
       event.listen('recording_status', (e) => {
         isRecording = e.payload;
         console.log('[Indicator] Recording:', isRecording);
 
         if (isRecording) {
           capsule.classList.add('visible');
+          applyIntentClass();
         } else {
           targetLevel = 0;
-          // 录音结束，如果没有后置处理就准备退场
+          // 褰曢煶缁撴潫锛屽鏋滄病鏈夊悗缃鐞嗗氨鍑嗗閫€鍦?
           if (!isProcessing && !isLlmProcessing) {
             setTimeout(() => {
               if (!isProcessing && !isLlmProcessing && !isFadingOut) {
@@ -390,7 +486,7 @@
         }
       });
 
-      // 流式文字更新
+      // 婵炵繝绀佺槐锟犲棘閸パ呮憻闁哄洤鐡ㄩ弻?
       event.listen('stream_update', (e) => {
         streamText = e.payload || '';
         if (streamText.length > 0) {
@@ -400,7 +496,7 @@
         }
       });
 
-      // 识别处理状态
+      // 閻犲洤妫楅崺鍡樺緞閸曨厽鍊為柣妯垮煐閳?
       event.listen('recognition_processing', (e) => {
         isProcessing = e.payload;
         console.log('[Indicator] Recognition processing:', isProcessing);
@@ -417,7 +513,7 @@
         }
       });
 
-      // LLM 处理状态
+      // LLM 濠㈣泛瀚幃濠囨偐閼哥鍋?
       event.listen('llm_processing', (e) => {
         isLlmProcessing = e.payload;
         console.log('[Indicator] LLM processing:', isLlmProcessing);
@@ -434,7 +530,7 @@
         }
       });
 
-      // 会话结束 - 开始退场
+      // 濞村吋淇洪惁鐣岀磼閹惧瓨灏?- 鐎殿喒鍋撳┑顔碱儔閳ь兘鍋撻柛?
       event.listen('session_complete', () => {
         console.log('[Indicator] Session complete, starting fade-out');
         startFadeOut();
@@ -443,35 +539,35 @@
       console.log('[Indicator] All event listeners registered');
     }
 
-    // ─────────────────────────────────────────────
-    // 初始化
-    // ─────────────────────────────────────────────
+    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
+    // 闁告帗绻傞～鎰板礌?
+    // 闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋撻柍鍏夊亾闁冲厜鍋?
     async function init() {
       console.log('[Indicator] Initializing...');
 
       try {
-        // 等待 Tauri 就绪
+        // 缂佹稑顦欢?Tauri 閻忓繗浜崡?
         const tauri = await waitForTauri();
         console.log('[Indicator] Tauri IPC ready');
 
-        // 保存 API 引用
+        // 濞ｅ洦绻傞悺?API 鐎殿喗娲滈弫?
         tauriEvent = tauri.event;
         tauriWindow = tauri.window;
 
-        // 注册事件监听
+        // 婵炲鍔岄崬鑺ョ鐎ｂ晜顐介柣鈺傚灥閹?
         setupEventListeners(tauriEvent);
 
-        // 启动动画循环
+        // 闁告凹鍨版慨鈺呭礉閵娧勬毎鐎甸偊浜為獮?
         animate();
 
         console.log('[Indicator] Initialization complete');
       } catch (err) {
-        showError('初始化失败: ' + err.message);
+        showError('闁告帗绻傞～鎰板礌閺嵮佷杭閻? ' + err.message);
         console.error('[Indicator] Init failed:', err);
       }
     }
 
-    // 页面加载完成后初始化
+    // 濡炪倗鏁诲浼村礉閻樼儤绁伴悗鐟版湰閸ㄦ岸宕ユ惔鈥崇仴濠殿喖顑呯€?
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', init);
     } else {

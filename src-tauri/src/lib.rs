@@ -29,19 +29,52 @@ type SkillExecutionState = Arc<Mutex<Option<SkillExecutionSession>>>;
 
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use arboard::Clipboard;
 use enigo::{Enigo, Key, Keyboard, Settings};
 
 // Monotonic id to correlate a single transcription pipeline across logs.
 static TRANSCRIPTION_SEQ: AtomicU64 = AtomicU64::new(1);
+static DICTATION_SESSION_SEQ: AtomicU64 = AtomicU64::new(1);
 static SKILL_SESSION_SEQ: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RecordingMode {
-    Dictation,
+enum DictationIntent {
+    Raw,
+    Polish,
     Skill,
+    None,
+}
+
+impl DictationIntent {
+    fn as_event(self) -> &'static str {
+        match self {
+            Self::Raw => "raw",
+            Self::Polish => "polish",
+            Self::Skill => "skill",
+            Self::None => "none",
+        }
+    }
+}
+
+#[derive(Debug)]
+struct PendingFinalizeState {
+    session_id: u64,
+    intent: DictationIntent,
+    window_elapsed: bool,
+    asr_result: Option<Result<String, String>>,
+}
+
+#[derive(Debug)]
+enum DictationState {
+    Idle,
+    Recording {
+        intent: DictationIntent,
+        started_at: Instant,
+    },
+    PendingFinalize(PendingFinalizeState),
+    SkillRecording,
 }
 
 #[derive(Debug, Default)]
@@ -69,19 +102,15 @@ fn preview_text(s: &str, max_chars: usize) -> String {
     out
 }
 
-// Indicator window colors
-const INDICATOR_COLOR_RECORDING: &str = "#4f9d9a"; // Indigo-cyan for normal recording
-const INDICATOR_COLOR_LLM: &str = "#dc2626"; // Red for LLM processing
+const DOUBLE_CLICK_WINDOW_MS: u64 = 280;
 
-/// Show the indicator window and set its color
-fn show_indicator_window<R: Runtime>(app_handle: &AppHandle<R>, is_llm: bool) {
+fn emit_dictation_intent<R: Runtime>(app_handle: &AppHandle<R>, intent: DictationIntent) {
+    app_handle.emit("dictation_intent", intent.as_event()).ok();
+}
+
+/// Show the indicator window.
+fn show_indicator_window<R: Runtime>(app_handle: &AppHandle<R>) {
     if let Some(window) = app_handle.get_webview_window("indicator") {
-        let color = if is_llm {
-            INDICATOR_COLOR_LLM
-        } else {
-            INDICATOR_COLOR_RECORDING
-        };
-
         let listener = app_handle.state::<InputListenerState>();
         let (x, y) = listener.get_last_mouse_position();
 
@@ -117,27 +146,7 @@ fn show_indicator_window<R: Runtime>(app_handle: &AppHandle<R>, is_llm: bool) {
             }
         }
 
-        window.emit("indicator_color", color).ok();
         window.show().ok();
-    }
-
-    #[test]
-    fn split_skill_clause_stops_at_first_separator() {
-        let input = "\u{63a7}\u{5236}\u{9762}\u{677f}\u{ff0c}\u{6253}\u{5f00}\u{547d}\u{4ee4}\u{63d0}\u{793a}\u{7b26}";
-        let (clause, consumed_end) = split_skill_clause(input);
-
-        assert_eq!(clause, "\u{63a7}\u{5236}\u{9762}\u{677f}");
-        assert_eq!(&input[consumed_end..], "\u{6253}\u{5f00}\u{547d}\u{4ee4}\u{63d0}\u{793a}\u{7b26}");
-    }
-
-    #[test]
-    fn normalize_direct_windows_query_strips_open_prefix_and_page_suffix() {
-        assert_eq!(
-            normalize_direct_windows_query(
-                "\u{6253}\u{5f00}\u{8bbe}\u{7f6e}\u{9875}\u{9762}"
-            ),
-            "\u{8bbe}\u{7f6e}"
-        );
     }
 }
 
@@ -170,10 +179,12 @@ fn process_transcription<R: Runtime>(
     processing: ProcessingState,
     llm_cancel: LlmCancelState,
     seq_id: u64,
+    polish_requested: bool,
 ) {
     if text.trim().is_empty() {
         println!("[TRANSCRIPTION] #{} empty, skipping", seq_id);
         processing.store(false, std::sync::atomic::Ordering::SeqCst);
+        emit_dictation_intent(app_handle, DictationIntent::None);
         return;
     }
 
@@ -188,6 +199,7 @@ fn process_transcription<R: Runtime>(
     let config = storage.load_config();
     let llm_config = config.llm_config.clone();
     let proxy_config = config.proxy.clone();
+    let effective_polish = llm_config.enabled || polish_requested;
 
     let app_handle_clone = app_handle.clone();
     let processing_clone = processing.clone();
@@ -204,7 +216,7 @@ fn process_transcription<R: Runtime>(
         }
         let _guard = ProcessingGuard(processing_clone);
 
-        let final_text = if llm_config.enabled {
+        let final_text = if effective_polish {
             // Create cancellation token for this LLM request
             let cancel_token = CancellationToken::new();
             {
@@ -220,7 +232,7 @@ fn process_transcription<R: Runtime>(
                     .track_mouse_position
                     .store(true, std::sync::atomic::Ordering::Relaxed);
             }
-            show_indicator_window(&app_handle_clone, true);
+            show_indicator_window(&app_handle_clone);
 
             // Use tokio::select! to race between LLM request and cancellation
             let llm_result = tokio::select! {
@@ -247,6 +259,7 @@ fn process_transcription<R: Runtime>(
                     .track_mouse_position
                     .store(false, std::sync::atomic::Ordering::Relaxed);
             }
+            emit_dictation_intent(&app_handle_clone, DictationIntent::None);
             emit_session_complete(&app_handle_clone);
 
             match llm_result {
@@ -271,16 +284,19 @@ fn process_transcription<R: Runtime>(
                 None => {
                     // Cancelled - don't output anything
                     println!("[TRANSCRIPTION] #{} aborted due to cancellation", seq_id);
+                    emit_dictation_intent(&app_handle_clone, DictationIntent::None);
                     return;
                 }
             }
         } else {
+            emit_dictation_intent(&app_handle_clone, DictationIntent::None);
             emit_session_complete(&app_handle_clone);
             text
         };
 
         if final_text.trim().is_empty() {
             println!("[TRANSCRIPTION] #{} final empty, skipping", seq_id);
+            emit_dictation_intent(&app_handle_clone, DictationIntent::None);
             return;
         }
 
@@ -1798,7 +1814,7 @@ fn set_browser_llm_state<R: Runtime>(app_handle: &AppHandle<R>, active: bool) {
         .track_mouse_position
         .store(active, std::sync::atomic::Ordering::Relaxed);
     if active {
-        show_indicator_window(app_handle, true);
+        show_indicator_window(app_handle);
     }
 }
 
@@ -2094,42 +2110,6 @@ fn plan_config_skill_update(
     config: &AppConfig,
 ) -> Result<ConfigSkillPlan, String> {
     match skill_match.skill_id.as_str() {
-        skills::ENABLE_POLISH_SKILL_ID => {
-            if config.llm_config.enabled {
-                return Ok(ConfigSkillPlan::Feedback(VoiceCommandFeedback {
-                    level: "info".to_string(),
-                    message: "润色已经处于启用状态".to_string(),
-                }));
-            }
-
-            let mut next_config = config.clone();
-            next_config.llm_config.enabled = true;
-            Ok(ConfigSkillPlan::Save {
-                config: next_config,
-                feedback: VoiceCommandFeedback {
-                    level: "success".to_string(),
-                    message: "已启用润色".to_string(),
-                },
-            })
-        }
-        skills::DISABLE_POLISH_SKILL_ID => {
-            if !config.llm_config.enabled {
-                return Ok(ConfigSkillPlan::Feedback(VoiceCommandFeedback {
-                    level: "info".to_string(),
-                    message: "润色已经处于关闭状态".to_string(),
-                }));
-            }
-
-            let mut next_config = config.clone();
-            next_config.llm_config.enabled = false;
-            Ok(ConfigSkillPlan::Save {
-                config: next_config,
-                feedback: VoiceCommandFeedback {
-                    level: "success".to_string(),
-                    message: "已关闭润色".to_string(),
-                },
-            })
-        }
         skills::SWITCH_POLISH_SCENE_SKILL_ID => {
             let scene_query = skills::extract_scene_query(transcript, skill_match, next_match);
             if scene_query.is_empty() {
@@ -2211,6 +2191,7 @@ fn execute_config_skill<R: Runtime>(
 fn begin_recording_session<R: Runtime>(
     app_handle: &AppHandle<R>,
     streaming_session: &mut Option<asr::StreamingSession>,
+    intent: DictationIntent,
     skill_mode: bool,
     llm_cancel: LlmCancelState,
     skill_state: SkillExecutionState,
@@ -2233,7 +2214,8 @@ fn begin_recording_session<R: Runtime>(
     listener
         .track_mouse_position
         .store(true, std::sync::atomic::Ordering::Relaxed);
-    show_indicator_window(app_handle, false);
+    emit_dictation_intent(app_handle, intent);
+    show_indicator_window(app_handle);
 
     let storage = app_handle.state::<StorageState>();
     let config = storage.load_config();
@@ -2278,6 +2260,7 @@ fn begin_recording_session<R: Runtime>(
             listener
                 .track_mouse_position
                 .store(false, std::sync::atomic::Ordering::Relaxed);
+            emit_dictation_intent(app_handle, DictationIntent::None);
             emit_session_complete(app_handle);
             if let Ok(audio) = app_handle.state::<AudioState>().lock() {
                 let _ = audio.stop_recording();
@@ -2287,7 +2270,7 @@ fn begin_recording_session<R: Runtime>(
     }
 }
 
-fn finish_recording_session<R: Runtime>(app_handle: &AppHandle<R>) -> (Vec<f32>, u32) {
+fn stop_recording_now<R: Runtime>(app_handle: &AppHandle<R>) -> (Vec<f32>, u32) {
     app_handle.emit("recording_status", false).ok();
     let listener = app_handle.state::<InputListenerState>();
     listener
@@ -2310,15 +2293,112 @@ fn finish_recording_session<R: Runtime>(app_handle: &AppHandle<R>) -> (Vec<f32>,
     (buffer, sample_rate)
 }
 
-fn stop_and_transcribe<R: Runtime>(
+fn finish_streaming_asr_async(
+    tx: std::sync::mpsc::Sender<input_listener::InputEvent>,
+    session_id: u64,
+    session: asr::StreamingSession,
+    log_tag: &str,
+) {
+    let log_tag = log_tag.to_string();
+    std::thread::spawn(move || {
+        let transcribe_started = Instant::now();
+        let result = session.finish_and_wait().map_err(|err| err.to_string());
+        println!(
+            "[{}] Dictation ASR finished in {} ms for session {}",
+            log_tag,
+            transcribe_started.elapsed().as_millis(),
+            session_id
+        );
+        tx.send(input_listener::InputEvent::DictationAsrFinished { session_id, result })
+            .ok();
+    });
+}
+
+fn dispatch_final_transcription<R: Runtime>(
     app_handle: &AppHandle<R>,
-    streaming_session: &mut Option<asr::StreamingSession>,
+    text: String,
+    intent: DictationIntent,
     processing: ProcessingState,
     llm_cancel: LlmCancelState,
     log_tag: &str,
 ) {
+    let seq_id = TRANSCRIPTION_SEQ.fetch_add(1, AtomicOrdering::Relaxed);
+    println!(
+        "[{}] #{} Dispatching final dictation, intent={:?}, {} chars, preview='{}'",
+        log_tag,
+        seq_id,
+        intent,
+        text.len(),
+        preview_text(&text, 80)
+    );
+    process_transcription(
+        app_handle,
+        text,
+        processing,
+        llm_cancel,
+        seq_id,
+        matches!(intent, DictationIntent::Polish),
+    );
+}
+
+fn maybe_finalize_pending_dictation<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    pending: &mut PendingFinalizeState,
+    processing: ProcessingState,
+    llm_cancel: LlmCancelState,
+    log_tag: &str,
+) -> bool {
+    if !pending.window_elapsed {
+        return false;
+    }
+
+    let Some(result) = pending.asr_result.take() else {
+        return false;
+    };
+
+    match result {
+        Ok(text) => {
+            dispatch_final_transcription(
+                app_handle,
+                text,
+                pending.intent,
+                processing,
+                llm_cancel,
+                log_tag,
+            );
+        }
+        Err(err) => {
+            eprintln!("[{}] Transcription error: {}", log_tag, err);
+            app_handle.emit("recognition_processing", false).ok();
+            emit_dictation_intent(app_handle, DictationIntent::None);
+            emit_session_complete(app_handle);
+            processing.store(false, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    true
+}
+
+fn begin_pending_finalize_window(
+    tx: std::sync::mpsc::Sender<input_listener::InputEvent>,
+    session_id: u64,
+) {
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(DOUBLE_CLICK_WINDOW_MS));
+        tx.send(input_listener::InputEvent::DictationFinalizeWindowElapsed { session_id })
+            .ok();
+    });
+}
+
+fn stop_dictation_recording<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    streaming_session: &mut Option<asr::StreamingSession>,
+    session_id: u64,
+    tx: std::sync::mpsc::Sender<input_listener::InputEvent>,
+    log_tag: &str,
+) -> Result<(), String> {
     let stop_started = Instant::now();
-    let (_buffer, _sample_rate) = finish_recording_session(app_handle);
+    let (_buffer, _sample_rate) = stop_recording_now(app_handle);
     println!(
         "[{}] Capture stopped in {} ms",
         log_tag,
@@ -2326,36 +2406,14 @@ fn stop_and_transcribe<R: Runtime>(
     );
 
     app_handle.emit("recognition_processing", true).ok();
-    let transcribe_started = Instant::now();
-    let text_result = if let Some(session) = streaming_session.take() {
-        session.finish_and_wait()
-    } else {
-        Err(anyhow::anyhow!("No active streaming session to finish"))
+    begin_pending_finalize_window(tx.clone(), session_id);
+
+    let Some(session) = streaming_session.take() else {
+        return Err("No active streaming session to finish".to_string());
     };
 
-    match text_result {
-        Ok(text) => {
-            app_handle.emit("stream_update", text.clone()).ok();
-            app_handle.emit("recognition_processing", false).ok();
-            let seq_id = TRANSCRIPTION_SEQ.fetch_add(1, AtomicOrdering::Relaxed);
-            println!(
-                "[{}] #{} Online transcription completed in {} ms, {} chars, preview='{}'",
-                log_tag,
-                seq_id,
-                transcribe_started.elapsed().as_millis(),
-                text.len(),
-                preview_text(&text, 80)
-            );
-
-            process_transcription(app_handle, text, processing, llm_cancel, seq_id);
-        }
-        Err(e) => {
-            app_handle.emit("recognition_processing", false).ok();
-            eprintln!("[{}] Transcription error: {}", log_tag, e);
-            processing.store(false, std::sync::atomic::Ordering::SeqCst);
-            emit_session_complete(app_handle);
-        }
-    }
+    finish_streaming_asr_async(tx, session_id, session, log_tag);
+    Ok(())
 }
 
 fn stop_skill_recording_async<R: Runtime>(
@@ -2366,12 +2424,13 @@ fn stop_skill_recording_async<R: Runtime>(
     log_tag: &str,
 ) {
     let stop_started = Instant::now();
-    let (_buffer, _sample_rate) = finish_recording_session(app_handle);
+    let (_buffer, _sample_rate) = stop_recording_now(app_handle);
     println!(
         "[{}] Skill capture stopped in {} ms",
         log_tag,
         stop_started.elapsed().as_millis()
     );
+    emit_dictation_intent(app_handle, DictationIntent::None);
     emit_session_complete(app_handle);
 
     let Some(session) = streaming_session.take() else {
@@ -2649,7 +2708,7 @@ pub fn run() {
 
             // Channel for Input Events
             let (tx, rx) = std::sync::mpsc::channel();
-            input_listener.start(tx);
+            input_listener.start(tx.clone());
 
             // Shared processing flag:
             // We must NOT allow a new transcription/paste to start while the previous async
@@ -2665,69 +2724,160 @@ pub fn run() {
             let processing_for_thread = processing_state.clone();
             let llm_cancel_for_thread = llm_cancel_state.clone();
             let skill_execution_for_thread = skill_execution_state.clone();
+            let event_tx = tx.clone();
             #[allow(unreachable_code)]
             std::thread::spawn(move || {
-                let mut recording_mode: Option<RecordingMode> = None;
+                let mut dictation_state = DictationState::Idle;
                 let mut streaming_session: Option<asr::StreamingSession> = None;
 
                 for event in rx {
                     match event {
-                        input_listener::InputEvent::Toggle => {
-                            if recording_mode == Some(RecordingMode::Dictation)
-                                && !processing_for_thread.load(std::sync::atomic::Ordering::SeqCst)
-                            {
-                                recording_mode = None;
+                        input_listener::InputEvent::Click => {
+                            match &mut dictation_state {
+                                DictationState::Idle => {
+                                    if processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
+                                        cancel_pending_llm(&llm_cancel_for_thread, "CLICK");
+                                        std::thread::sleep(Duration::from_millis(50));
+                                    }
 
-                                if processing_for_thread
-                                    .compare_exchange(
+                                    if processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
+                                        continue;
+                                    }
+
+                                    let forced_polish = app_handle
+                                        .state::<StorageState>()
+                                        .load_config()
+                                        .llm_config
+                                        .enabled;
+                                    let intent = if forced_polish {
+                                        DictationIntent::Polish
+                                    } else {
+                                        DictationIntent::Raw
+                                    };
+
+                                    if begin_recording_session(
+                                        &app_handle,
+                                        &mut streaming_session,
+                                        intent,
                                         false,
-                                        true,
-                                        std::sync::atomic::Ordering::SeqCst,
-                                        std::sync::atomic::Ordering::SeqCst,
-                                    )
-                                    .is_err()
-                                {
-                                    continue;
+                                        llm_cancel_for_thread.clone(),
+                                        skill_execution_for_thread.clone(),
+                                    ) {
+                                        dictation_state = DictationState::Recording {
+                                            intent,
+                                            started_at: Instant::now(),
+                                        };
+                                    }
                                 }
-                                stop_and_transcribe(
-                                    &app_handle,
-                                    &mut streaming_session,
-                                    processing_for_thread.clone(),
-                                    llm_cancel_for_thread.clone(),
-                                    "TOGGLE",
-                                );
-                            } else if recording_mode.is_none() {
-                                if processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
-                                    cancel_pending_llm(&llm_cancel_for_thread, "TOGGLE");
-                                    std::thread::sleep(std::time::Duration::from_millis(50));
-                                }
+                                DictationState::Recording { intent, started_at } => {
+                                    let forced_polish = app_handle
+                                        .state::<StorageState>()
+                                        .load_config()
+                                        .llm_config
+                                        .enabled;
 
-                                if processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
-                                    continue;
-                                }
+                                    if started_at.elapsed()
+                                        <= Duration::from_millis(DOUBLE_CLICK_WINDOW_MS)
+                                    {
+                                        if !forced_polish && *intent == DictationIntent::Raw {
+                                            *intent = DictationIntent::Polish;
+                                            emit_dictation_intent(
+                                                &app_handle,
+                                                DictationIntent::Polish,
+                                            );
+                                        }
+                                        continue;
+                                    }
 
-                                if begin_recording_session(
-                                    &app_handle,
-                                    &mut streaming_session,
-                                    false,
-                                    llm_cancel_for_thread.clone(),
-                                    skill_execution_for_thread.clone(),
-                                ) {
-                                    recording_mode = Some(RecordingMode::Dictation);
+                                    if processing_for_thread
+                                        .compare_exchange(
+                                            false,
+                                            true,
+                                            std::sync::atomic::Ordering::SeqCst,
+                                            std::sync::atomic::Ordering::SeqCst,
+                                        )
+                                        .is_err()
+                                    {
+                                        continue;
+                                    }
+
+                                    let session_id =
+                                        DICTATION_SESSION_SEQ.fetch_add(1, AtomicOrdering::Relaxed);
+                                    let final_intent = if forced_polish {
+                                        DictationIntent::Polish
+                                    } else {
+                                        *intent
+                                    };
+
+                                    match stop_dictation_recording(
+                                        &app_handle,
+                                        &mut streaming_session,
+                                        session_id,
+                                        event_tx.clone(),
+                                        "CLICK",
+                                    ) {
+                                        Ok(()) => {
+                                            dictation_state = DictationState::PendingFinalize(
+                                                PendingFinalizeState {
+                                                    session_id,
+                                                    intent: final_intent,
+                                                    window_elapsed: false,
+                                                    asr_result: None,
+                                                },
+                                            );
+                                        }
+                                        Err(err) => {
+                                            eprintln!(
+                                                "[CLICK] Failed to finalize dictation session: {}",
+                                                err
+                                            );
+                                            processing_for_thread.store(
+                                                false,
+                                                std::sync::atomic::Ordering::SeqCst,
+                                            );
+                                            emit_dictation_intent(
+                                                &app_handle,
+                                                DictationIntent::None,
+                                            );
+                                            emit_session_complete(&app_handle);
+                                            dictation_state = DictationState::Idle;
+                                        }
+                                    }
                                 }
+                                DictationState::PendingFinalize(pending) => {
+                                    if pending.window_elapsed {
+                                        continue;
+                                    }
+
+                                    let forced_polish = app_handle
+                                        .state::<StorageState>()
+                                        .load_config()
+                                        .llm_config
+                                        .enabled;
+                                    if !forced_polish
+                                        && pending.intent == DictationIntent::Raw
+                                    {
+                                        pending.intent = DictationIntent::Polish;
+                                        emit_dictation_intent(
+                                            &app_handle,
+                                            DictationIntent::Polish,
+                                        );
+                                    }
+                                }
+                                DictationState::SkillRecording => {}
                             }
-                        },
+                        }
                         input_listener::InputEvent::MouseMove => {
                             // Mouse movement detected - indicator stays at bottom-center
-                        },
+                        }
                         input_listener::InputEvent::StartSkill => {
-                            if recording_mode.is_some() {
+                            if !matches!(dictation_state, DictationState::Idle) {
                                 continue;
                             }
 
                             if processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
                                 cancel_pending_llm(&llm_cancel_for_thread, "SKILL");
-                                std::thread::sleep(std::time::Duration::from_millis(50));
+                                std::thread::sleep(Duration::from_millis(50));
                             }
 
                             if processing_for_thread.load(std::sync::atomic::Ordering::SeqCst) {
@@ -2737,19 +2887,20 @@ pub fn run() {
                             if begin_recording_session(
                                 &app_handle,
                                 &mut streaming_session,
+                                DictationIntent::Skill,
                                 true,
                                 llm_cancel_for_thread.clone(),
                                 skill_execution_for_thread.clone(),
                             ) {
-                                recording_mode = Some(RecordingMode::Skill);
+                                dictation_state = DictationState::SkillRecording;
                             }
-                        },
+                        }
                         input_listener::InputEvent::StopSkill => {
-                            if recording_mode != Some(RecordingMode::Skill) {
+                            if !matches!(dictation_state, DictationState::SkillRecording) {
                                 continue;
                             }
 
-                            recording_mode = None;
+                            dictation_state = DictationState::Idle;
 
                             stop_skill_recording_async(
                                 &app_handle,
@@ -2758,6 +2909,63 @@ pub fn run() {
                                 skill_execution_for_thread.clone(),
                                 "SKILL",
                             );
+                        }
+                        input_listener::InputEvent::DictationFinalizeWindowElapsed {
+                            session_id,
+                        } => {
+                            let should_reset = if let DictationState::PendingFinalize(pending) =
+                                &mut dictation_state
+                            {
+                                if pending.session_id != session_id {
+                                    false
+                                } else {
+                                    pending.window_elapsed = true;
+                                    maybe_finalize_pending_dictation(
+                                        &app_handle,
+                                        pending,
+                                        processing_for_thread.clone(),
+                                        llm_cancel_for_thread.clone(),
+                                        "CLICK",
+                                    )
+                                }
+                            } else {
+                                false
+                            };
+
+                            if should_reset {
+                                dictation_state = DictationState::Idle;
+                            }
+                        }
+                        input_listener::InputEvent::DictationAsrFinished {
+                            session_id,
+                            result,
+                        } => {
+                            let should_reset = if let DictationState::PendingFinalize(pending) =
+                                &mut dictation_state
+                            {
+                                if pending.session_id != session_id {
+                                    false
+                                } else {
+                                    if let Ok(text) = result.as_ref() {
+                                        app_handle.emit("stream_update", text.clone()).ok();
+                                    }
+                                    app_handle.emit("recognition_processing", false).ok();
+                                    pending.asr_result = Some(result);
+                                    maybe_finalize_pending_dictation(
+                                        &app_handle,
+                                        pending,
+                                        processing_for_thread.clone(),
+                                        llm_cancel_for_thread.clone(),
+                                        "CLICK",
+                                    )
+                                }
+                            } else {
+                                false
+                            };
+
+                            if should_reset {
+                                dictation_state = DictationState::Idle;
+                            }
                         }
                     }
                 }
@@ -2798,9 +3006,7 @@ mod tests {
         plan_config_skill_update, prepare_skill_transcript, AppConfig, ConfigSkillPlan,
         SkillExecutionSession, SkillExecutionState, VoiceCommandFeedback,
     };
-    use crate::skills::{
-        SkillMatch, DISABLE_POLISH_SKILL_ID, ENABLE_POLISH_SKILL_ID, SWITCH_POLISH_SCENE_SKILL_ID,
-    };
+    use crate::skills::{SkillMatch, SWITCH_POLISH_SCENE_SKILL_ID};
     use crate::storage::PromptProfile;
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
@@ -2837,47 +3043,20 @@ mod tests {
     }
 
     #[test]
-    fn enable_polish_plans_enabled_config() {
-        let config = AppConfig::default();
-        let plan = plan_config_skill_update(
-            "启用润色",
-            &SkillMatch {
-                skill_id: ENABLE_POLISH_SKILL_ID.to_string(),
-                keyword: "启用润色".to_string(),
-                start: 0,
-                end: "启用润色".len(),
-            },
-            None,
-            &config,
-        )
-        .expect("plan should succeed");
+    fn split_skill_clause_stops_at_first_separator() {
+        let input = "控制面板，打开命令提示符";
+        let (clause, consumed_end) = super::split_skill_clause(input);
 
-        let (next_config, feedback) = expect_saved_config(plan);
-        assert!(next_config.llm_config.enabled);
-        assert_eq!(feedback.message, "已启用润色");
+        assert_eq!(clause, "控制面板");
+        assert_eq!(&input[consumed_end..], "打开命令提示符");
     }
 
     #[test]
-    fn disable_polish_plans_disabled_config() {
-        let mut config = AppConfig::default();
-        config.llm_config.enabled = true;
-
-        let plan = plan_config_skill_update(
-            "关闭润色",
-            &SkillMatch {
-                skill_id: DISABLE_POLISH_SKILL_ID.to_string(),
-                keyword: "关闭润色".to_string(),
-                start: 0,
-                end: "关闭润色".len(),
-            },
-            None,
-            &config,
-        )
-        .expect("plan should succeed");
-
-        let (next_config, feedback) = expect_saved_config(plan);
-        assert!(!next_config.llm_config.enabled);
-        assert_eq!(feedback.message, "已关闭润色");
+    fn normalize_direct_windows_query_strips_open_prefix_and_page_suffix() {
+        assert_eq!(
+            super::normalize_direct_windows_query("打开设置页面"),
+            "设置"
+        );
     }
 
     #[test]
@@ -2963,43 +3142,6 @@ mod tests {
             }
             ConfigSkillPlan::Save { .. } => panic!("expected ambiguity feedback"),
         }
-    }
-
-    #[test]
-    fn combined_enable_and_switch_commands_apply_in_order() {
-        let mut config = AppConfig::default();
-        config.llm_config.enabled = false;
-        config.llm_config.profiles = vec![
-            profile("default", "默认", &[]),
-            profile("email", "邮件", &["邮件"]),
-        ];
-        config.llm_config.active_profile_id = "default".to_string();
-
-        let transcript = "启用润色切换到邮件";
-        let enable_match = SkillMatch {
-            skill_id: ENABLE_POLISH_SKILL_ID.to_string(),
-            keyword: "启用润色".to_string(),
-            start: 0,
-            end: "启用润色".len(),
-        };
-        let switch_match = SkillMatch {
-            skill_id: SWITCH_POLISH_SCENE_SKILL_ID.to_string(),
-            keyword: "切换到".to_string(),
-            start: "启用润色".len(),
-            end: "启用润色切换到".len(),
-        };
-
-        let (after_enable, _) = expect_saved_config(
-            plan_config_skill_update(transcript, &enable_match, Some(&switch_match), &config)
-                .expect("enable plan should succeed"),
-        );
-        let (after_switch, _) = expect_saved_config(
-            plan_config_skill_update(transcript, &switch_match, None, &after_enable)
-                .expect("switch plan should succeed"),
-        );
-
-        assert!(after_switch.llm_config.enabled);
-        assert_eq!(after_switch.llm_config.active_profile_id, "email");
     }
 
     #[test]

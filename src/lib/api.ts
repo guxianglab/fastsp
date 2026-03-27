@@ -121,6 +121,8 @@ export interface VoiceCommandFeedback {
     message: string;
 }
 
+export type DictationIntent = "raw" | "polish" | "skill" | "none";
+
 export const api = {
     getConfig: () => invoke<AppConfig>("get_config"),
     takeRuntimeNotice: () => invoke<string | null>("take_runtime_notice"),
@@ -148,6 +150,8 @@ export const events = {
     onLlmError: (callback: (message: string) => void) => listen<string>("llm_error", (e) => callback(e.payload)),
     onMousePosition: (callback: (pos: { x: number; y: number }) => void) => listen<{ x: number; y: number }>("mouse_position", (e) => callback(e.payload)),
     onStreamUpdate: (callback: (text: string) => void) => listen<string>("stream_update", (e) => callback(e.payload)),
+    onDictationIntent: (callback: (intent: DictationIntent) => void) =>
+        listen<DictationIntent>("dictation_intent", (e) => callback(e.payload)),
     onConfigUpdated: (callback: (config: AppConfig) => void) => listen<AppConfig>("config_updated", (e) => callback(e.payload)),
     onVoiceCommandFeedback: (callback: (payload: VoiceCommandFeedback) => void) =>
         listen<VoiceCommandFeedback>("voice_command_feedback", (e) => callback(e.payload)),
